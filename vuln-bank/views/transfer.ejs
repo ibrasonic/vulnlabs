@@ -1,0 +1,20 @@
+<%- include('partials/header') %>
+<h1>Transfer money</h1>
+<% if (error) { %><p class="err"><%- error %></p><% } %>
+<% if (ok) { %><p class="ok">Transfer sent.</p><% } %>
+<form method="post" action="/transfer/send">
+  <label>From
+    <select name="from">
+      <% for (const a of accounts) { %>
+        <option value="<%= a.account_number %>">
+          <%= a.account_number %> &mdash; $<%= (a.balance_cents / 100).toFixed(2) %>
+        </option>
+      <% } %>
+    </select>
+  </label>
+  <label>To (account number) <input name="to" required></label>
+  <label>Amount (cents) <input name="amount" type="number" min="1" required></label>
+  <label>Memo <input name="memo" maxlength="60"></label>
+  <button>Send</button>
+</form>
+<%- include('partials/footer') %>

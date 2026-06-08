@@ -1,0 +1,28 @@
+<%- include('partials/header') %>
+<h1>PulseMod &mdash; AI summary</h1>
+<p class="muted">Generate a moderation-ready summary of any post on the network.</p>
+<% if (msg) { %><div class="ok"><%= msg %></div><% } %>
+<form method="post" action="/ai-summary/summarize">
+  <label>Post ID <input name="post_id" value="<%= postId %>"></label>
+  <label>Moderator context <input name="extra_context" placeholder="optional"></label>
+  <button>Summarize</button>
+</form>
+<% if (summary) { %>
+  <h2>Summary</h2>
+  <pre class="ai"><%= summary %></pre>
+<% } %>
+<h2>Recent activity</h2>
+<table class="grid">
+  <thead><tr><th>ID</th><th>User</th><th>Prompt</th><th>Response</th></tr></thead>
+  <tbody>
+    <% recent.forEach(a => { %>
+      <tr>
+        <td><%= a.id %></td>
+        <td><%= a.username || 'system' %></td>
+        <td><code><%= (a.prompt || '').slice(0, 120) %></code></td>
+        <td><code><%= (a.response || '').slice(0, 200) %></code></td>
+      </tr>
+    <% }) %>
+  </tbody>
+</table>
+<%- include('partials/footer') %>

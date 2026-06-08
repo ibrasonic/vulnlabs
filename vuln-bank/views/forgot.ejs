@@ -1,0 +1,10 @@
+<%- include('partials/header') %>
+<h1>Forgot password</h1>
+<% if (sent) { %><p class="ok">If that email exists, a 4-digit reset code has been emailed.</p><% } %>
+<% if (error) { %><p class="err"><%- error %></p><% } %>
+<form method="post" action="/forgot">
+  <label>Email <input name="email" type="email" required></label>
+  <button>Send code</button>
+</form>
+<p>Already got a code? <a href="/reset">Use it here</a>.</p>
+<%- include('partials/footer') %>

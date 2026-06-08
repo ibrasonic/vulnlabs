@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="240" height="200" viewBox="0 0 240 200">
+  <rect width="240" height="200" fill="#f0ebe0"/>
+  <!-- headband -->
+  <ellipse cx="120" cy="115" rx="85" ry="25" fill="none" stroke="#1c2418" stroke-width="6"/>
+  <!-- lamp housing -->
+  <rect x="80" y="80" width="80" height="50" rx="6" fill="#2e3a2c" stroke="#1c2418" stroke-width="2"/>
+  <!-- lens -->
+  <circle cx="120" cy="105" r="20" fill="#fff8c4" stroke="#1c2418" stroke-width="2"/>
+  <circle cx="120" cy="105" r="14" fill="#fff3a0"/>
+  <circle cx="115" cy="100" r="5" fill="#ffffff" opacity="0.7"/>
+  <!-- light beam -->
+  <path d="M120 105 L60 60 L60 150 Z" fill="#fff8c4" opacity="0.2"/>
+  <text x="120" y="190" font-family="sans-serif" font-size="10" text-anchor="middle" fill="#6b7280">NW-1005 Headlamp 400lm</text>
+</svg>

@@ -1,0 +1,18 @@
+<%- include('partials/header') %>
+<h1>Search</h1>
+<form method="get" action="/search">
+  <input name="q" value="<%= q %>" placeholder="username or display name">
+  <button>Search</button>
+</form>
+<% if (error) { %><div class="error"><%= error %></div><% } %>
+<ul class="userlist">
+  <% rows.forEach(u => { %>
+    <li>
+      <img src="<%= u.avatar %>" alt="" width="48" height="48">
+      <a href="/u/<%= u.username %>"><strong><%= u.display_name %></strong></a>
+      <span class="handle">@<%= u.username %></span>
+      <p><%- u.bio %></p>
+    </li>
+  <% }) %>
+</ul>
+<%- include('partials/footer') %>

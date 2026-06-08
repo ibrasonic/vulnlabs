@@ -1,0 +1,15 @@
+services:
+  social:
+    build: .
+    ports: ["3003:3003"]
+    environment:
+      PORT: "3003"
+      HOST: "0.0.0.0"
+      GEMINI_API_KEY: "${GEMINI_API_KEY:-}"
+      GEMINI_MODEL: "${GEMINI_MODEL:-gemini-2.0-flash}"
+    volumes:
+      # Named volume — SQLite WAL mode is unreliable on Windows DrvFs bind mounts.
+      - social-data:/app/data
+
+volumes:
+  social-data:

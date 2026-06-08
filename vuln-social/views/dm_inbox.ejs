@@ -1,0 +1,13 @@
+<%- include('partials/header') %>
+<h1>Direct messages</h1>
+<ul class="userlist">
+  <% peers.forEach(p => { %>
+    <li>
+      <img src="<%= p.avatar %>" alt="" width="48" height="48">
+      <a href="/dm/thread?with=<%= p.id %>"><strong><%= p.display_name %></strong></a>
+      <span class="handle">@<%= p.username %></span>
+      <span class="ts">last <%= p.last_at %></span>
+    </li>
+  <% }) %>
+</ul>
+<%- include('partials/footer') %>

@@ -1,0 +1,12 @@
+<%- include('partials/header') %>
+<h1>Support inbox</h1>
+<p><a href="/admin/users" class="link">Manage users &rarr;</a></p>
+<h2>Open tickets</h2>
+<% for (const m of messages) { %>
+  <article class="ticket">
+    <h3>From <%- m.author %>: <%- m.subject %></h3>
+    <div><%- m.body %></div>
+    <small><%= m.created_at %></small>
+  </article>
+<% } %>
+<%- include('partials/footer') %>

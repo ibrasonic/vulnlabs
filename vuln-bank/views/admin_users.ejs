@@ -1,0 +1,27 @@
+<%- include('partials/header') %>
+<h1>Admin &mdash; Users</h1>
+<form method="get" action="/admin/users">
+  <label>Search <input name="q" value="<%= q %>"></label>
+  <button>Search</button>
+</form>
+<table>
+  <thead><tr><th>id</th><th>username</th><th>full name</th><th>email</th><th>SSN</th><th>role</th><th></th></tr></thead>
+  <tbody>
+  <% for (const r of rows) { %>
+    <tr>
+      <td><%= r.id %></td>
+      <td><%= r.username %></td>
+      <td><%- r.full_name %></td>
+      <td><%= r.email %></td>
+      <td><%= r.ssn %></td>
+      <td><%= r.role %></td>
+      <td>
+        <a href="/admin/users/<%= r.id %>">json</a> &middot;
+        <a href="/admin/promote?id=<%= r.id %>">promote</a> &middot;
+        <a href="/admin/users/<%= r.id %>/delete">delete</a>
+      </td>
+    </tr>
+  <% } %>
+  </tbody>
+</table>
+<%- include('partials/footer') %>

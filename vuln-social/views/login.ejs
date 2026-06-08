@@ -1,0 +1,14 @@
+<%- include('partials/header') %>
+<section class="auth-card">
+  <h1>Welcome back</h1>
+  <p class="muted">Sign in to see what your friends are up to.</p>
+  <% if (error) { %><div class="error"><%= error %></div><% } %>
+  <form method="post" action="/login" class="stacked">
+    <input type="hidden" name="next" value="<%= next %>">
+    <label>Username <input name="username" autocomplete="username"></label>
+    <label>Password <input type="password" name="password" autocomplete="current-password"></label>
+    <button>Sign in</button>
+  </form>
+  <p class="auth-links">No account? <a href="/register">Create one</a></p>
+</section>
+<%- include('partials/footer') %>

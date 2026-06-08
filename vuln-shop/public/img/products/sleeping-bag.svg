@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="240" height="200" viewBox="0 0 240 200">
+  <rect width="240" height="200" fill="#f0ebe0"/>
+  <!-- bag main -->
+  <rect x="50" y="80" width="140" height="90" rx="15" fill="#3a5a72" stroke="#1c3045" stroke-width="2"/>
+  <!-- top tube -->
+  <rect x="60" y="65" width="120" height="22" rx="8" fill="#2e4a5e" stroke="#1c3045" stroke-width="2"/>
+  <!-- drawstring -->
+  <circle cx="120" cy="76" r="4" fill="#1c2418"/>
+  <line x1="116" y1="76" x2="105" y2="65" stroke="#1c2418" stroke-width="1.5"/>
+  <line x1="124" y1="76" x2="135" y2="65" stroke="#1c2418" stroke-width="1.5"/>
+  <!-- zipper -->
+  <line x1="60" y1="125" x2="180" y2="125" stroke="#cbd1c5" stroke-width="1" stroke-dasharray="3,2"/>
+  <!-- temp tag -->
+  <rect x="100" y="135" width="40" height="22" rx="3" fill="#cad8b8"/>
+  <text x="120" y="150" font-family="sans-serif" font-size="11" text-anchor="middle" fill="#2e3a2c">-7&#176;C</text>
+  <text x="120" y="190" font-family="sans-serif" font-size="10" text-anchor="middle" fill="#6b7280">NW-1012 Sleeping Bag</text>
+</svg>

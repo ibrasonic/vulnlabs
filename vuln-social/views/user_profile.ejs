@@ -1,0 +1,27 @@
+<%- include('partials/header') %>
+<header class="profile-head">
+  <img class="big-avatar" src="<%= u.avatar %>" alt="">
+  <div>
+    <h1><%= u.display_name %> <span class="handle">@<%= u.username %></span></h1>
+    <p class="bio"><%- u.bio %></p>
+    <p class="counts"><%= followers %> followers &middot; <%= following %> following</p>
+    <% if (user && user.username !== u.username) { %>
+      <a class="btn" href="/follow/<%= u.username %>">Follow</a>
+      <a class="btn ghost" href="/follow/<%= u.username %>/unfollow">Unfollow</a>
+      <a class="btn ghost" href="/dm/thread?with=<%= u.id %>">Message</a>
+    <% } %>
+  </div>
+</header>
+<section class="feed">
+  <% posts.forEach(p => { %>
+    <article class="post">
+      <a class="avatar" href="/u/<%= p.username %>"><img src="<%= p.avatar %>" alt=""></a>
+      <div class="post-body">
+        <div class="meta"><strong><%= p.display_name %></strong> <span class="handle">@<%= p.username %></span> <span class="ts"><%= p.created_at %></span></div>
+        <div class="body"><%- p.body %></div>
+        <div class="actions"><a href="/p/<%= p.id %>">Open</a></div>
+      </div>
+    </article>
+  <% }) %>
+</section>
+<%- include('partials/footer') %>

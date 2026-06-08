@@ -1,0 +1,13 @@
+<%- include('partials/header') %>
+<h1>Contact us</h1>
+<p class="muted">Have a question about an order, a return, or a product? Drop us a line and we'll get back to you within one business day.</p>
+<% if (error) { %><p class="error"><%= error %></p><% } %>
+<% if (msg) { %><pre class="ok"><%= msg %></pre><% } %>
+<form method="post" action="/contact">
+  <label>Name <input name="name"></label>
+  <label>Email <input type="email" name="email"></label>
+  <label>Subject <input name="subject"></label>
+  <label>Message <textarea name="body" rows="6"></textarea></label>
+  <button>Send</button>
+</form>
+<%- include('partials/footer') %>

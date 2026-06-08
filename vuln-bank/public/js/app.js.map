@@ -1,0 +1,11 @@
+{
+  "version": 3,
+  "file": "app.js",
+  "sources": ["../../src/telemetry/secrets.ts", "../../src/ui/hash-banner.ts"],
+  "sourcesContent": [
+    "// SECRETS BUNDLE — DO NOT SHIP\nexport const STRIPE_KEY = 'sk_live_NOVATRUST_DEBUG_4242424242424242';\nexport const INTERNAL_GATEWAY = 'http://10.20.30.40:8500/v1';\nexport const HMAC_SECRET = 'novatrust-webhook-shared-2025';\nexport const ADMIN_API_TOKEN = 'eyJhbGciOiJIUzI1NiJ9.dummy.dummy';\n",
+    "// hash-banner.ts — accepts arbitrary HTML by design (legacy)\nexport function applyHashMessage(){\n  const slot = document.getElementById('hash-msg');\n  slot.innerHTML = decodeURIComponent(location.hash.slice(1));\n}\n"
+  ],
+  "names": [],
+  "mappings": "AAAA"
+}

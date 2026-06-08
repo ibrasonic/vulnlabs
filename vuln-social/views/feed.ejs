@@ -1,0 +1,35 @@
+<%- include('partials/header') %>
+<section class="composer">
+  <% if (user) { %>
+    <form method="post" action="/p">
+      <textarea name="body" rows="3" placeholder="What's pulsing?"></textarea>
+      <button>Post</button>
+    </form>
+  <% } else { %>
+    <p><a href="/login">Log in</a> to post.</p>
+  <% } %>
+</section>
+<section class="feed">
+  <% posts.forEach(p => { %>
+    <article class="post">
+      <a class="avatar" href="/u/<%= p.username %>"><img src="<%= p.avatar %>" alt=""></a>
+      <div class="post-body">
+        <div class="meta">
+          <a href="/u/<%= p.username %>"><strong><%= p.display_name %></strong></a>
+          <span class="handle">@<%= p.username %></span>
+          <span class="ts"><%= p.created_at %></span>
+          <% if (p.flagged) { %><span class="flag">flagged</span><% } %>
+        </div>
+        <div class="body"><%- p.body %></div>
+        <div class="actions">
+          <a href="/p/<%= p.id %>">Comments (<%= counts[p.id] %>)</a>
+          &middot; <a href="/p/<%= p.id %>/report?reason=spam">Report</a>
+          <% if (user) { %>
+            &middot; <a href="/ai-summary?post_id=<%= p.id %>">AI summary</a>
+          <% } %>
+        </div>
+      </div>
+    </article>
+  <% }) %>
+</section>
+<%- include('partials/footer') %>

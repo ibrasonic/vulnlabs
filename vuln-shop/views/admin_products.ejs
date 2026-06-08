@@ -1,0 +1,39 @@
+<%- include('partials/header') %>
+<h1>Admin &middot; Products</h1>
+<% if (msg) { %><p class="ok"><%= msg %></p><% } %>
+<h2>Add product</h2>
+<form method="post" action="/admin/products">
+  <label>SKU <input name="sku" required></label>
+  <label>Name <input name="name" required></label>
+  <label>Description <textarea name="description"></textarea></label>
+  <label>Price (cents) <input type="number" name="price_cents" required></label>
+  <label>Stock <input type="number" name="stock"></label>
+  <label>Image URL <input name="image_url"></label>
+  <label>Category <input name="category"></label>
+  <button>Add</button>
+</form>
+
+<h2>Catalog</h2>
+<table>
+  <thead><tr><th>ID</th><th>SKU</th><th>Name</th><th>Price</th><th>Stock</th><th></th></tr></thead>
+  <tbody>
+    <% list.forEach(p => { %>
+      <tr>
+        <td><%= p.id %></td>
+        <td><%= p.sku %></td>
+        <td><%= p.name %></td>
+        <td>$<%= (p.price_cents / 100).toFixed(2) %></td>
+        <td><%= p.stock %></td>
+        <td><form method="post" action="/admin/products/<%= p.id %>/delete" style="display:inline"><button>delete</button></form></td>
+      </tr>
+    <% }) %>
+  </tbody>
+</table>
+
+<h2>File upload (any extension allowed)</h2>
+<form method="post" action="/admin/upload" enctype="multipart/form-data">
+  <input type="file" name="file" required>
+  <input name="purpose" placeholder="purpose (optional)">
+  <button>Upload</button>
+</form>
+<%- include('partials/footer') %>

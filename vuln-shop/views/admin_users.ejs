@@ -1,0 +1,22 @@
+<%- include('partials/header') %>
+<h1>Admin &middot; Users</h1>
+<form method="get" action="/admin/users"><input name="q" value="<%= q %>" placeholder="search"><button>Search</button></form>
+<table>
+  <thead><tr><th>ID</th><th>Username</th><th>Email</th><th>Role</th><th>Credits</th><th></th></tr></thead>
+  <tbody>
+    <% list.forEach(u => { %>
+      <tr>
+        <td><%= u.id %></td>
+        <td><%= u.username %></td>
+        <td><%= u.email %></td>
+        <td><%= u.role %></td>
+        <td>$<%= (u.credits_cents / 100).toFixed(2) %></td>
+        <td>
+          <a href="/admin/users/<%= u.id %>">json</a> &middot;
+          <a href="/admin/users/<%= u.id %>/promote">promote</a>
+        </td>
+      </tr>
+    <% }) %>
+  </tbody>
+</table>
+<%- include('partials/footer') %>

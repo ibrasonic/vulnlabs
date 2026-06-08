@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="240" height="200" viewBox="0 0 240 200">
+  <rect width="240" height="200" fill="#f0ebe0"/>
+  <!-- folded map base -->
+  <rect x="30" y="40" width="180" height="130" fill="#f5efd6" stroke="#2e3a2c" stroke-width="2"/>
+  <!-- fold lines -->
+  <line x1="90"  y1="40" x2="90"  y2="170" stroke="#cbd1c5" stroke-width="1" stroke-dasharray="3,3"/>
+  <line x1="150" y1="40" x2="150" y2="170" stroke="#cbd1c5" stroke-width="1" stroke-dasharray="3,3"/>
+  <line x1="30"  y1="105" x2="210" y2="105" stroke="#cbd1c5" stroke-width="1" stroke-dasharray="3,3"/>
+  <!-- contour lines -->
+  <path d="M50 70 Q90 60 130 75 Q170 90 195 80" fill="none" stroke="#6e7d4d" stroke-width="1"/>
+  <path d="M55 90 Q95 80 130 95 Q170 110 190 100" fill="none" stroke="#6e7d4d" stroke-width="1"/>
+  <path d="M60 110 Q100 100 130 115 Q170 130 185 120" fill="none" stroke="#6e7d4d" stroke-width="1"/>
+  <path d="M65 130 Q105 120 130 135 Q170 150 180 140" fill="none" stroke="#6e7d4d" stroke-width="1"/>
+  <!-- summit triangle -->
+  <polygon points="130,90 145,115 115,115" fill="#8a5a2b" stroke="#4a3015" stroke-width="1"/>
+  <text x="155" y="118" font-family="sans-serif" font-size="8" fill="#2e3a2c">3211m</text>
+  <!-- compass rose -->
+  <circle cx="55" cy="155" r="10" fill="none" stroke="#2e3a2c" stroke-width="1"/>
+  <polygon points="55,148 58,155 55,162 52,155" fill="#b91c1c"/>
+  <text x="55" y="146" font-family="sans-serif" font-size="6" text-anchor="middle" fill="#2e3a2c">N</text>
+  <text x="120" y="190" font-family="sans-serif" font-size="10" text-anchor="middle" fill="#6b7280">NW-1009 Cascades Topo Map</text>
+</svg>

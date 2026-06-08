@@ -1,0 +1,11 @@
+{
+  "version": 3,
+  "file": "app.js",
+  "sources": ["../../src/secrets.ts", "../../src/dom/hash.ts"],
+  "sourcesContent": [
+    "// secrets.ts - DO NOT SHIP\nexport const SHOPIFY = 'sk_test_NORTHWIND_DEBUG_4242424242424242';\nexport const INTERNAL_GATEWAY = 'http://10.0.0.5:9090/admin';\nexport const STRIPE_LIVE = 'sk_live_REAL_NORTHWIND_KEY_GOES_HERE';\n",
+    "export function applyHashMessage(){\n  const slot = document.getElementById('hash-msg');\n  slot.innerHTML = decodeURIComponent(location.hash.slice(1));\n}\n"
+  ],
+  "names": [],
+  "mappings": "AAAA"
+}

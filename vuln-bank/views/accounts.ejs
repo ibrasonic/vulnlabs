@@ -1,0 +1,21 @@
+<%- include('partials/header') %>
+<h1>Your accounts</h1>
+<% if (msg) { %><p class="ok"><%- msg %></p><% } %>
+<table>
+  <thead><tr><th>Number</th><th>Type</th><th>Balance</th><th></th></tr></thead>
+  <tbody>
+  <% for (const a of accounts) { %>
+    <tr>
+      <td><code><%= a.account_number %></code></td>
+      <td><%= a.account_type %></td>
+      <td>$<%= (a.balance_cents / 100).toFixed(2) %></td>
+      <td><a href="/accounts/<%= a.id %>">View &raquo;</a></td>
+    </tr>
+  <% } %>
+  </tbody>
+</table>
+<form method="get" action="/accounts/search">
+  <label>Find an account / payee <input name="q" placeholder="name or number"></label>
+  <button>Search</button>
+</form>
+<%- include('partials/footer') %>

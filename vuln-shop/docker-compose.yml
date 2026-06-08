@@ -1,0 +1,21 @@
+services:
+  shop:
+    build: .
+    ports: ["3002:3002"]
+    environment:
+      PORT: "3002"
+      HOST: "0.0.0.0"
+      EMAIL_SERVICE_URL: "http://email:5002"
+    depends_on: [email]
+    volumes:
+      # Named volume — SQLite WAL mode is unreliable on Windows DrvFs bind mounts.
+      - shop-data:/app/data
+  email:
+    build: ./email-service
+    ports: ["5002:5002"]
+    environment:
+      PORT: "5002"
+      HOST: "0.0.0.0"
+
+volumes:
+  shop-data:

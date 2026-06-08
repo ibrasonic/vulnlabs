@@ -1,0 +1,35 @@
+<%- include('partials/header') %>
+<h1>Admin dashboard</h1>
+<p><a href="/admin/products">Manage products</a> &middot; <a href="/admin/users">Manage users</a></p>
+
+<h2>Recent support messages</h2>
+<table>
+  <thead><tr><th>From</th><th>Subject</th><th>Body</th><th>When</th></tr></thead>
+  <tbody>
+    <% support.forEach(m => { %>
+      <tr>
+        <td><%= m.username || 'guest' %></td>
+        <td><%= m.subject %></td>
+        <td><%- m.body %></td>
+        <td><%= m.created_at %></td>
+      </tr>
+    <% }) %>
+  </tbody>
+</table>
+
+<h2>Recent orders</h2>
+<table>
+  <thead><tr><th>#</th><th>User</th><th>Total</th><th>Status</th><th>Shipping</th></tr></thead>
+  <tbody>
+    <% orders.forEach(o => { %>
+      <tr>
+        <td>#<%= o.id %></td>
+        <td><%= o.username %></td>
+        <td>$<%= (o.total_cents / 100).toFixed(2) %></td>
+        <td><%= o.status %></td>
+        <td><%- o.shipping_address %></td>
+      </tr>
+    <% }) %>
+  </tbody>
+</table>
+<%- include('partials/footer') %>

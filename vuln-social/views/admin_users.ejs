@@ -1,0 +1,20 @@
+<%- include('partials/header') %>
+<h1>Admin &middot; Users</h1>
+<form method="get" action="/admin/users"><input name="q" value="<%= q %>"><button>Search</button></form>
+<% if (error) { %><div class="error"><%= error %></div><% } %>
+<table class="grid">
+  <thead><tr><th>ID</th><th>Username</th><th>Email</th><th>Role</th><th>Password</th><th></th></tr></thead>
+  <tbody>
+    <% rows.forEach(u => { %>
+      <tr>
+        <td><%= u.id %></td>
+        <td><%= u.username %></td>
+        <td><%= u.email %></td>
+        <td><%= u.role %></td>
+        <td><code><%= u.password_md5 %></code></td>
+        <td><a href="/admin/users/<%= u.id %>/promote">promote</a> &middot; <a href="/admin/users/<%= u.id %>/delete">delete</a></td>
+      </tr>
+    <% }) %>
+  </tbody>
+</table>
+<%- include('partials/footer') %>

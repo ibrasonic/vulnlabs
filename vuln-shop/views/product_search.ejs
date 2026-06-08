@@ -1,0 +1,14 @@
+<%- include('partials/header') %>
+<h1>Search results</h1>
+<p>Showing matches for &ldquo;<%- q %>&rdquo;</p>
+<% if (error) { %><pre class="error"><%= error %></pre><% } %>
+<div class="catalog">
+  <% rows.forEach(p => { %>
+    <div class="product-card">
+      <a href="/products/<%= p.id %>"><h3><%= p.name %></h3>
+      <p class="sku"><%= p.sku %></p>
+      <p class="price">$<%= ((p.price_cents || 0) / 100).toFixed(2) %></p></a>
+    </div>
+  <% }) %>
+</div>
+<%- include('partials/footer') %>

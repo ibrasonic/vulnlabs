@@ -1,0 +1,10 @@
+<%- include('partials/header') %>
+<h1>Reset password</h1>
+<% if (error) { %><p class="err"><%- error %></p><% } %>
+<form method="post" action="/reset">
+  <label>Email <input name="email" type="email" value="<%= email %>" required></label>
+  <label>Reset code <input name="token" required></label>
+  <label>New password <input name="password" type="password" required></label>
+  <button>Reset</button>
+</form>
+<%- include('partials/footer') %>

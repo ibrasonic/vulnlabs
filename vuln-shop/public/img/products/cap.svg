@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="240" height="200" viewBox="0 0 240 200">
+  <rect width="240" height="200" fill="#f0ebe0"/>
+  <!-- crown -->
+  <path d="M55 130 Q55 70 120 60 Q185 70 185 130 L155 130 L150 120 L130 125 L120 115 L110 125 L90 120 L85 130 Z" fill="#3e4a5e" stroke="#1c2438" stroke-width="2"/>
+  <!-- brim -->
+  <path d="M40 135 Q120 155 200 135 L195 145 Q120 170 45 145 Z" fill="#2e3848" stroke="#1c2438" stroke-width="2"/>
+  <!-- panel stitches -->
+  <path d="M120 60 L120 130" stroke="#1c2438" stroke-width="1" stroke-dasharray="3,2"/>
+  <path d="M90 65 L90 128" stroke="#1c2438" stroke-width="1" stroke-dasharray="3,2"/>
+  <path d="M150 65 L150 128" stroke="#1c2438" stroke-width="1" stroke-dasharray="3,2"/>
+  <!-- button -->
+  <circle cx="120" cy="68" r="4" fill="#1c2438"/>
+  <!-- patch logo -->
+  <rect x="100" y="95" width="40" height="20" rx="3" fill="#cad8b8"/>
+  <text x="120" y="109" font-family="sans-serif" font-size="9" text-anchor="middle" fill="#2e3a2c">NW</text>
+  <text x="120" y="195" font-family="sans-serif" font-size="10" text-anchor="middle" fill="#6b7280">NW-1010 Logo Cap</text>
+</svg>

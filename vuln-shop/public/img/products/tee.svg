@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="240" height="200" viewBox="0 0 240 200">
+  <rect width="240" height="200" fill="#f0ebe0"/>
+  <!-- tee body -->
+  <path d="M70 70 L60 50 L95 35 Q120 30 145 35 L180 50 L170 70 L155 80 L155 175 L85 175 L85 80 Z" fill="#a8b89a" stroke="#5a6e4a" stroke-width="2"/>
+  <!-- neckline -->
+  <path d="M105 35 Q120 50 135 35" fill="none" stroke="#5a6e4a" stroke-width="2"/>
+  <!-- shoulder seams -->
+  <line x1="85" y1="80" x2="95" y2="55" stroke="#5a6e4a" stroke-width="1"/>
+  <line x1="155" y1="80" x2="145" y2="55" stroke="#5a6e4a" stroke-width="1"/>
+  <!-- merino tag -->
+  <rect x="105" y="85" width="30" height="12" fill="#5a6e4a"/>
+  <text x="120" y="94" font-family="sans-serif" font-size="7" text-anchor="middle" fill="#f0ebe0">MERINO</text>
+  <text x="120" y="190" font-family="sans-serif" font-size="10" text-anchor="middle" fill="#6b7280">NW-1006 Merino Tee</text>
+</svg>

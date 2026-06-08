@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="240" height="200" viewBox="0 0 240 200">
+  <rect width="240" height="200" fill="#f0ebe0"/>
+  <!-- main pack body -->
+  <path d="M75 50 Q75 35 90 35 L150 35 Q165 35 165 50 L168 170 Q168 180 158 180 L82 180 Q72 180 72 170 Z" fill="#8a5a2b" stroke="#4a3015" stroke-width="2"/>
+  <!-- straps -->
+  <rect x="60" y="50" width="10" height="120" rx="3" fill="#4a3015"/>
+  <rect x="170" y="50" width="10" height="120" rx="3" fill="#4a3015"/>
+  <!-- top lid -->
+  <path d="M80 40 L160 40 L158 60 L82 60 Z" fill="#6b4520" stroke="#4a3015" stroke-width="1.5"/>
+  <!-- buckle -->
+  <rect x="110" y="65" width="20" height="10" fill="#2e3a2c" stroke="#1c2418" stroke-width="1"/>
+  <!-- front pocket -->
+  <rect x="90" y="100" width="60" height="50" rx="3" fill="#6b4520" stroke="#4a3015" stroke-width="1.5"/>
+  <line x1="120" y1="100" x2="120" y2="150" stroke="#4a3015" stroke-width="1"/>
+  <!-- compression straps -->
+  <line x1="75" y1="110" x2="165" y2="110" stroke="#4a3015" stroke-width="1.5"/>
+  <line x1="75" y1="140" x2="165" y2="140" stroke="#4a3015" stroke-width="1.5"/>
+  <text x="120" y="195" font-family="sans-serif" font-size="10" text-anchor="middle" fill="#6b7280">NW-1004 32L Backpack</text>
+</svg>

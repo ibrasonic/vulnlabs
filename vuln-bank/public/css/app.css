@@ -1,0 +1,52 @@
+:root{--primary:#0a3d62;--primary-dark:#052b47;--primary-light:#1e5b8a;--accent:#f4a261;--bg:#f5f7fa;--surface:#fff;--border:#e3e8ef;--text:#1d1f24;--muted:#5e6878;--error-bg:#fde8e8;--error:#b00020;--ok-bg:#e8f7ee;--ok:#1b7340;--radius:8px;--shadow:0 1px 3px rgba(0,0,0,.06);--shadow-lg:0 4px 16px rgba(10,61,98,.08)}
+*{box-sizing:border-box}
+body{font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,Helvetica,Arial,sans-serif;margin:0;color:var(--text);background:var(--bg);line-height:1.5;-webkit-font-smoothing:antialiased}
+a{color:var(--primary);text-decoration:none}
+a:hover{color:var(--primary-dark);text-decoration:underline}
+small{color:var(--muted)}
+
+.topbar{display:flex;gap:16px;align-items:center;padding:14px 32px;background:var(--primary);color:#fff;box-shadow:0 2px 6px rgba(0,0,0,.08)}
+.topbar .brand a{color:#fff;font-weight:700;font-size:18px;letter-spacing:-0.01em}
+.topbar nav{margin-left:auto;display:flex;gap:4px;align-items:center;flex-wrap:wrap}
+.topbar nav a{color:rgba(255,255,255,.88);padding:6px 12px;border-radius:6px;font-size:14px;font-weight:500}
+.topbar nav a:hover{background:rgba(255,255,255,.12);color:#fff;text-decoration:none}
+.topbar .who{color:var(--accent);margin:0 6px;font-size:13px;font-weight:500}
+
+.container{max-width:1100px;margin:28px auto;padding:28px 32px;background:var(--surface);border-radius:var(--radius);box-shadow:var(--shadow)}
+
+h1{margin:0 0 20px;color:var(--primary);font-weight:600;letter-spacing:-0.01em;font-size:26px}
+h2{color:var(--primary);font-weight:600;margin-top:28px;font-size:19px;border-bottom:1px solid var(--border);padding-bottom:8px}
+h3{color:var(--text);font-weight:600;font-size:16px;margin:16px 0 8px}
+p{margin:8px 0}
+.muted{color:var(--muted);font-size:14px}
+
+table{width:100%;border-collapse:collapse;margin:12px 0;background:var(--surface)}
+th,td{text-align:left;padding:10px 12px;border-bottom:1px solid var(--border);font-size:14px}
+th{background:#f0f4f8;color:var(--primary);font-weight:600;font-size:12px;text-transform:uppercase;letter-spacing:.04em}
+tbody tr:hover{background:#fafbfc}
+
+form{margin:8px 0}
+form label{display:block;margin:12px 0;font-size:14px;color:var(--muted);font-weight:500}
+form input,form select,form textarea{width:100%;padding:9px 12px;border:1px solid var(--border);border-radius:6px;font:inherit;background:#fff;color:var(--text);margin-top:4px;transition:border-color .15s}
+form input:focus,form select:focus,form textarea:focus{outline:0;border-color:var(--primary);box-shadow:0 0 0 3px rgba(10,61,98,.12)}
+form button,.btn{background:var(--primary);color:#fff;padding:10px 22px;border:0;border-radius:6px;cursor:pointer;font-size:14px;font-weight:600;display:inline-block;text-decoration:none}
+form button:hover,.btn:hover{background:var(--primary-dark)}
+.btn.ghost{background:transparent;color:var(--primary);border:1px solid var(--primary)}
+
+.err{color:var(--error);background:var(--error-bg);padding:10px 14px;border-radius:6px;margin:8px 0;border-left:3px solid var(--error)}
+.ok{color:var(--ok);background:var(--ok-bg);padding:10px 14px;border-radius:6px;margin:8px 0;border-left:3px solid var(--ok)}
+.hint{color:var(--muted);font-size:13px}
+
+.ticket{background:#fafbff;padding:14px 18px;border-left:3px solid var(--primary);margin:12px 0;border-radius:4px;box-shadow:var(--shadow)}
+.ticket h3{margin-top:0;color:var(--primary)}
+
+footer{text-align:center;margin:40px 0 24px;color:var(--muted);font-size:13px}
+code{background:#f0f0f0;padding:2px 6px;border-radius:3px;font-size:13px;color:#444}
+pre{background:#1d1f24;color:#d6e4f0;padding:14px 16px;border-radius:6px;overflow:auto;font-size:13px;line-height:1.5}
+
+.auth-card{max-width:420px;margin:40px auto;padding:32px;background:var(--surface);border-radius:var(--radius);box-shadow:var(--shadow-lg)}
+.auth-card h1{font-size:24px;margin-bottom:8px}
+.auth-card .muted{margin-bottom:24px}
+.auth-card form.stacked label{margin:14px 0}
+.auth-card form button{width:100%;margin-top:16px;padding:12px}
+.auth-card .auth-links{margin-top:20px;text-align:center;font-size:14px;color:var(--muted)}

@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="240" height="200" viewBox="0 0 240 200">
+  <rect width="240" height="200" fill="#f0ebe0"/>
+  <!-- pot body -->
+  <ellipse cx="120" cy="80" rx="60" ry="10" fill="#b9bcc0" stroke="#5e6068" stroke-width="2"/>
+  <rect x="60" y="80" width="120" height="80" fill="#cdd0d4" stroke="#5e6068" stroke-width="2"/>
+  <ellipse cx="120" cy="160" rx="60" ry="10" fill="#9da0a4" stroke="#5e6068" stroke-width="2"/>
+  <!-- handles -->
+  <path d="M60 105 Q40 110 40 120 Q40 130 60 130" fill="none" stroke="#5e6068" stroke-width="3"/>
+  <path d="M180 105 Q200 110 200 120 Q200 130 180 130" fill="none" stroke="#5e6068" stroke-width="3"/>
+  <!-- lid -->
+  <ellipse cx="120" cy="78" rx="58" ry="6" fill="#5e6068"/>
+  <rect x="115" y="60" width="10" height="18" rx="3" fill="#2e3a2c"/>
+  <!-- spork -->
+  <line x1="195" y1="80" x2="225" y2="55" stroke="#5e6068" stroke-width="3"/>
+  <path d="M220 50 L230 45 L230 65 L225 60 Z" fill="#9da0a4" stroke="#5e6068" stroke-width="1"/>
+  <text x="120" y="190" font-family="sans-serif" font-size="10" text-anchor="middle" fill="#6b7280">NW-1007 Titanium Pot Set</text>
+</svg>

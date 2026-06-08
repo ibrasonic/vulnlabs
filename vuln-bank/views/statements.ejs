@@ -1,0 +1,29 @@
+<%- include('partials/header') %>
+<h1>Statements</h1>
+<% if (error) { %><p class="err"><%- error %></p><% } %>
+<% if (ok) { %><p class="ok">OK</p><% } %>
+<table>
+  <thead><tr><th>Account</th><th>File</th><th>Uploaded</th></tr></thead>
+  <tbody>
+  <% for (const s of stmts) { %>
+    <tr>
+      <td><code><%= s.account_number %></code></td>
+      <td><a href="/statements/file?name=<%= encodeURIComponent(s.filename) %>"><%- s.filename %></a></td>
+      <td><%= s.created_at %></td>
+    </tr>
+  <% } %>
+  </tbody>
+</table>
+<h2>Upload a new statement</h2>
+<form method="post" action="/statements/upload" enctype="multipart/form-data">
+  <label>Account ID <input name="account_id" required></label>
+  <label>File <input name="file" type="file" required></label>
+  <button>Upload</button>
+</form>
+
+<h2>Import from a URL</h2>
+<form method="post" action="/statements/import">
+  <label>URL <input name="url" required></label>
+  <button>Import</button>
+</form>
+<%- include('partials/footer') %>

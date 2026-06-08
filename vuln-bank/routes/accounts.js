@@ -1,0 +1,46 @@
+// routes/accounts.js — list and view accounts.
+// VULNS: IDOR on /accounts/:id (no ownership check); reflected XSS via ?msg=.
+const express = require('express');
+const router = express.Router();
+const db = require('../lib/db');
+const { requireSession } = require('../lib/auth');
+
+router.use(requireSession);
+
+router.get('/', (req, res) => {
+  const accts = db.prepare('SELECT * FROM accounts WHERE user_id = ? ORDER BY id').all(req.session.userId);
+  res.render('accounts', { accounts: accts, msg: req.query.msg || '' });
+});
+
+// Search — VULN: SQLi via concatenated LIKE.
+// IMPORTANT: must be registered before `/:id` or Express matches
+// `/search` against the param route.
+router.get('/search', (req, res) => {
+  const q = req.query.q || '';
+  try {
+    const rows = db.prepare(`
+      SELECT account_number, full_name, balance_cents
+      FROM accounts JOIN users ON users.id = accounts.user_id
+      WHERE full_name LIKE '%${q}%' OR account_number LIKE '%${q}%'
+    `).all();
+    res.render('account_search', { rows, q, error: null });
+  } catch (e) {
+    res.status(500).render('account_search', { rows: [], q, error: e.message });
+  }
+});
+
+// VULN: IDOR — no `WHERE user_id = ?` filter (A01, Ch 11).
+router.get('/:id', (req, res) => {
+  const acct = db.prepare('SELECT * FROM accounts WHERE id = ?').get(req.params.id);
+  if (!acct) return res.status(404).send('not found');
+  // Fetch recent activity for *this* account (also unowned).
+  const tx = db.prepare(`
+    SELECT * FROM transfers
+    WHERE from_account = ? OR to_account = ?
+    ORDER BY created_at DESC LIMIT 25
+  `).all(acct.account_number, acct.account_number);
+  const owner = db.prepare('SELECT username, full_name FROM users WHERE id = ?').get(acct.user_id);
+  res.render('account_detail', { acct, tx, owner });
+});
+
+module.exports = router;

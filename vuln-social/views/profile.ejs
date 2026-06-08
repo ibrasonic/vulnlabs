@@ -1,0 +1,15 @@
+<%- include('partials/header') %>
+<h1>Profile settings</h1>
+<% if (msg) { %><div class="ok"><%= msg %></div><% } %>
+<% if (error) { %><div class="error"><%= error %></div><% } %>
+<form method="post" action="/profile">
+  <label>Display name <input name="display_name" value="<%= u.display_name %>"></label>
+  <label>Avatar URL   <input name="avatar" value="<%= u.avatar %>"></label>
+  <label>Bio          <textarea name="bio" rows="3"><%= u.bio %></textarea></label>
+  <label>Settings JSON
+    <textarea name="settings" rows="4" placeholder='{"theme":"dark"}'></textarea>
+  </label>
+  <button>Save</button>
+</form>
+<p>Perks self-check: <a href="/profile/perks-check">/profile/perks-check</a></p>
+<%- include('partials/footer') %>

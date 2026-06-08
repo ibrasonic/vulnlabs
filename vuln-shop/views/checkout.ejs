@@ -1,0 +1,28 @@
+<%- include('partials/header') %>
+<h1>Checkout</h1>
+<form method="post" action="/checkout/place">
+  <h2>Items</h2>
+  <ul>
+    <% items.forEach(i => { %>
+      <li><%= i.qty %> &times; <%= i.name %> &mdash; $<%= ((i.qty * i.price_cents) / 100).toFixed(2) %></li>
+    <% }) %>
+  </ul>
+  <p>Subtotal: $<%= (subtotal / 100).toFixed(2) %></p>
+  <label>Coupon code <input id="coupon" placeholder="STAFF50?"></label>
+  <button type="button" onclick="applyCoupon()">Apply</button>
+  <span id="couponMsg"></span>
+  <label>Shipping address <textarea name="shipping_address" rows="3"></textarea></label>
+  <button type="submit">Place order</button>
+</form>
+<script>
+function applyCoupon() {
+  fetch('/checkout/apply-coupon', {
+    method: 'POST',
+    headers: {'Content-Type':'application/x-www-form-urlencoded'},
+    body: 'code=' + encodeURIComponent(document.getElementById('coupon').value)
+  }).then(r => r.json()).then(j => {
+    document.getElementById('couponMsg').textContent = j.ok ? ('OK: ' + j.percent_off + '% off') : ('error: ' + j.error);
+  });
+}
+</script>
+<%- include('partials/footer') %>

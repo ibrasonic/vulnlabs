@@ -1,0 +1,12 @@
+<%- include('partials/header') %>
+<h1>Register</h1>
+<% if (error) { %><div class="error"><%= error %></div><% } %>
+<form method="post" action="/register">
+  <label>Username <input name="username" required></label>
+  <label>Password <input type="password" name="password" required></label>
+  <label>Email    <input name="email"></label>
+  <label>Display name <input name="display_name"></label>
+  <label>Bio <textarea name="bio" rows="3"></textarea></label>
+  <button>Create account</button>
+</form>
+<%- include('partials/footer') %>

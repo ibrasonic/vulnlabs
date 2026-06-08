@@ -1,0 +1,12 @@
+{
+  "version": 3,
+  "file": "app.js",
+  "sourceRoot": "",
+  "sources": ["src/app.ts", "src/secrets.ts"],
+  "sourcesContent": [
+    "// app.ts -- Pulse client glue\nimport { SENTRY_DSN, GEMINI_KEY, INTERNAL_BROADCAST_URL } from './secrets';\nimport io from 'socket.io-client';\n\nexport const SOCKET = io({ transports: ['websocket', 'polling'] });\nSOCKET.emit('subscribe', { user_id: window.__PULSE__.userId });\n\n// dev-only: broadcast secret-channel\nexport function broadcastPing() {\n  fetch(INTERNAL_BROADCAST_URL, { headers: { Authorization: 'Bearer ' + GEMINI_KEY }});\n}\n",
+    "// secrets.ts -- DO NOT COMMIT (we did)\nexport const SENTRY_DSN = 'https://e2e0c1f8a3c4c9b9a8aabbccdd@sentry.io/4242';\nexport const GEMINI_KEY  = 'AIzaSyDLEAKED_FROM_SOURCEMAP_KEY_PULSE_INTERNAL';\nexport const STRIPE_SK   = 'sk_live_PULSE_NEVER_SHIP_4848484848484848';\nexport const INTERNAL_BROADCAST_URL = 'http://pulse-internal.svc.cluster.local:8081/broadcast';\nexport const SESSION_SIGNING_KEY = 'pulse-change-me';\n"
+  ],
+  "names": [],
+  "mappings": ""
+}

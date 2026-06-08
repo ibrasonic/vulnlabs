@@ -1,0 +1,26 @@
+<%- include('partials/header') %>
+<h1>Northwind Outfitters</h1>
+<form method="get" action="/products/search" class="search">
+  <input name="q" value="<%= q %>" placeholder="search products...">
+  <button>Search</button>
+</form>
+<p class="filters">
+  <a href="/products">All</a>
+  <a href="/products?category=apparel">Apparel</a>
+  <a href="/products?category=gear">Gear</a>
+  <a href="/products?category=footwear">Footwear</a>
+  <a href="/products?category=maps">Maps</a>
+</p>
+<div class="catalog">
+  <% prods.forEach(p => { %>
+    <div class="product-card">
+      <a href="/products/<%= p.id %>">
+        <img src="<%= p.image_url %>" alt="<%= p.name %>" onerror="this.style.display='none'">
+        <h3><%= p.name %></h3>
+        <p class="sku"><%= p.sku %> &middot; <%= p.category %></p>
+        <p class="price">$<%= (p.price_cents / 100).toFixed(2) %></p>
+      </a>
+    </div>
+  <% }) %>
+</div>
+<%- include('partials/footer') %>

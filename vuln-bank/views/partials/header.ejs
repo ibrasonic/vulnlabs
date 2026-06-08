@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title><%= typeof title !== 'undefined' ? title : 'NovaTrust Bank' %></title>
+  <link rel="stylesheet" href="/static/css/app.css">
+  <script src="https://cdn.jsdelivr.net/npm/jquery@1.12.4/dist/jquery.min.js"></script>
+  <script src="/static/js/app.js"></script>
+</head>
+<body>
+<header class="topbar">
+  <div class="brand"><a href="/">NovaTrust Bank</a></div>
+  <nav>
+    <% if (user) { %>
+      <a href="/accounts">Accounts</a>
+      <a href="/transfer">Transfer</a>
+      <a href="/statements">Statements</a>
+      <a href="/support">Support</a>
+      <a href="/profile">Profile</a>
+      <% if (user.role === 'admin') { %><a href="/admin">Admin</a><% } %>
+      <span class="who">Hi, <%- user.username %></span>
+      <a href="/logout">Sign out</a>
+    <% } else { %>
+      <a href="/login">Sign in</a>
+      <a href="/register">Open an account</a>
+    <% } %>
+  </nav>
+</header>
+<main class="container">

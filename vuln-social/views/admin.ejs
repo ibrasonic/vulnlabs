@@ -1,0 +1,29 @@
+<%- include('partials/header') %>
+<h1>Admin</h1>
+<h2>Open reports (<%= reports.length %>)</h2>
+<table class="grid">
+  <thead><tr><th>ID</th><th>Post</th><th>Reason</th><th>Reporter</th><th>Status</th><th>Created</th></tr></thead>
+  <tbody>
+    <% reports.forEach(r => { %>
+      <tr>
+        <td><%= r.id %></td>
+        <td><a href="/p/<%= r.post_id %>">#<%= r.post_id %></a> <em><%- (r.post_body || '').slice(0, 80) %></em></td>
+        <td><%- r.reason %></td>
+        <td><%= r.reporter || 'system' %></td>
+        <td><%= r.status %></td>
+        <td><%= r.created_at %></td>
+      </tr>
+    <% }) %>
+  </tbody>
+</table>
+<h2>Users</h2>
+<form method="get" action="/admin/users"><input name="q" placeholder="search"><button>Search</button></form>
+<table class="grid">
+  <thead><tr><th>ID</th><th>Username</th><th>Display</th><th>Role</th><th>Created</th></tr></thead>
+  <tbody>
+    <% users.forEach(u => { %>
+      <tr><td><%= u.id %></td><td><a href="/u/<%= u.username %>"><%= u.username %></a></td><td><%= u.display_name %></td><td><%= u.role %></td><td><%= u.created_at %></td></tr>
+    <% }) %>
+  </tbody>
+</table>
+<%- include('partials/footer') %>

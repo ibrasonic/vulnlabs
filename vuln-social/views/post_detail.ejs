@@ -1,0 +1,27 @@
+<%- include('partials/header') %>
+<article class="post">
+  <a class="avatar" href="/u/<%= p.username %>"><img src="<%= p.avatar %>" alt=""></a>
+  <div class="post-body">
+    <div class="meta"><strong><%= p.display_name %></strong> <span class="handle">@<%= p.username %></span> <span class="ts"><%= p.created_at %></span></div>
+    <div class="body"><%- p.body %></div>
+  </div>
+</article>
+<h2>Comments</h2>
+<% comments.forEach(c => { %>
+  <div class="comment">
+    <img src="<%= c.avatar %>" alt="" width="32" height="32">
+    <div>
+      <strong><%= c.display_name %></strong>
+      <span class="handle">@<%= c.username %></span>
+      <span class="ts"><%= c.created_at %></span>
+      <p><%- c.body %></p>
+    </div>
+  </div>
+<% }) %>
+<% if (user) { %>
+  <form method="post" action="/p/<%= p.id %>/comments">
+    <textarea name="body" rows="2" placeholder="Add a comment"></textarea>
+    <button>Reply</button>
+  </form>
+<% } %>
+<%- include('partials/footer') %>

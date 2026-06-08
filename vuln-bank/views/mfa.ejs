@@ -1,0 +1,10 @@
+<%- include('partials/header') %>
+<h1>Multi-factor verification</h1>
+<% if (error) { %><p class="err"><%- error %></p><% } %>
+<p>Enter the 6-digit code from your authenticator app.</p>
+<form method="post" action="/mfa/verify">
+  <label>Code <input name="code" maxlength="6" required></label>
+  <input type="hidden" name="next" value="<%= next %>">
+  <button>Verify</button>
+</form>
+<%- include('partials/footer') %>

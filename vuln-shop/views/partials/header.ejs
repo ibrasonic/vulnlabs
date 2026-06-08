@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Northwind Outfitters</title>
+  <link rel="stylesheet" href="/static/css/app.css">
+  <script src="https://cdn.jsdelivr.net/npm/jquery@1.12.4/dist/jquery.min.js"></script>
+  <script src="/static/js/app.js"></script>
+</head>
+<body>
+  <header class="topnav">
+    <div class="brand"><a href="/products">Northwind Outfitters</a></div>
+    <nav>
+      <a href="/products">Shop</a>
+      <a href="/cart">Cart</a>
+      <a href="/orders">Orders</a>
+      <a href="/contact">Contact</a>
+      <% if (user) { %>
+        <a href="/profile"><%= user.username %></a>
+        <% if (user.role === 'admin') { %><a href="/admin">Admin</a><% } %>
+        <a href="/logout">Logout</a>
+      <% } else { %>
+        <a href="/login">Login</a>
+        <a href="/register">Register</a>
+      <% } %>
+    </nav>
+  </header>
+  <main class="container">

@@ -1,0 +1,37 @@
+<%- include('partials/header') %>
+<h1>Profile</h1>
+<% if (msg) { %><p class="ok"><%- msg %></p><% } %>
+<% if (error) { %><p class="err"><%- error %></p><% } %>
+<form method="post" action="/profile">
+  <label>Full name <input name="full_name" value="<%- u.full_name %>"></label>
+  <label>Phone <input name="phone" value="<%- u.phone || '' %>"></label>
+  <label>Address <input name="address" value="<%- u.address || '' %>"></label>
+  <label>Settings (JSON)
+    <textarea name="settings" rows="6"><%- u.profile_json %></textarea>
+  </label>
+  <button>Save</button>
+</form>
+
+<h2>Bank webhook</h2>
+<p>Have us notify your service when a transfer settles.</p>
+<form method="post" action="/webhooks">
+  <label>Notify URL <input name="url" placeholder="https://your-service.example.com/notify"></label>
+  <label>Event
+    <select name="event">
+      <option>transfer.completed</option>
+      <option>statement.uploaded</option>
+    </select>
+  </label>
+  <button>Register</button>
+</form>
+
+<h2>Account flags</h2>
+<button onclick="checkFlags()">Check entitlements</button>
+<pre id="flags"></pre>
+<script>
+async function checkFlags() {
+  const r = await fetch('/profile/admin-check', { credentials: 'include' });
+  document.getElementById('flags').textContent = await r.text();
+}
+</script>
+<%- include('partials/footer') %>

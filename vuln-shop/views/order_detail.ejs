@@ -1,0 +1,15 @@
+<%- include('partials/header') %>
+<h1>Order #<%= o.id %></h1>
+<p>Status: <%= o.status %></p>
+<p>Coupon: <%= o.coupon || '-' %></p>
+<p>Total: $<%= (o.total_cents / 100).toFixed(2) %></p>
+<p>Shipping to:<br><pre><%- o.shipping_address %></pre></p>
+
+<h2>Items</h2>
+<ul>
+  <% items.forEach(i => { %>
+    <li><%= i.qty %> &times; <%= i.name %> (<%= i.sku %>) &mdash; $<%= ((i.qty * i.price_cents) / 100).toFixed(2) %></li>
+  <% }) %>
+</ul>
+<p><a href="/orders">&larr; back to orders</a></p>
+<%- include('partials/footer') %>

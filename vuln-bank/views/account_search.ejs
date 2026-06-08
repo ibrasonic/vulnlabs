@@ -1,0 +1,16 @@
+<%- include('partials/header') %>
+<h1>Search results for &ldquo;<%- q %>&rdquo;</h1>
+<% if (typeof error !== 'undefined' && error) { %><p class="err"><%- error %></p><% } %>
+<table>
+  <thead><tr><th>Holder</th><th>Account</th><th>Balance</th></tr></thead>
+  <tbody>
+  <% for (const r of rows) { %>
+    <tr>
+      <td><%- r.full_name %></td>
+      <td><code><%= r.account_number %></code></td>
+      <td>$<%= (r.balance_cents / 100).toFixed(2) %></td>
+    </tr>
+  <% } %>
+  </tbody>
+</table>
+<%- include('partials/footer') %>

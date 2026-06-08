@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="240" height="200" viewBox="0 0 240 200">
+  <rect width="240" height="200" fill="#f0ebe0"/>
+  <!-- bottle body -->
+  <rect x="95" y="55" width="50" height="115" rx="6" fill="#9eb8d1" stroke="#3e5a78" stroke-width="2"/>
+  <!-- cap -->
+  <rect x="100" y="35" width="40" height="22" rx="3" fill="#2e3a2c" stroke="#1c2418" stroke-width="2"/>
+  <rect x="108" y="28" width="24" height="10" rx="2" fill="#3e5a78"/>
+  <!-- highlight -->
+  <rect x="103" y="65" width="6" height="90" fill="#cfe0ee" opacity="0.7"/>
+  <!-- label band -->
+  <rect x="95" y="100" width="50" height="22" fill="#2e3a2c"/>
+  <text x="120" y="115" font-family="sans-serif" font-size="9" text-anchor="middle" fill="#f0ebe0">ATLAS 22oz</text>
+  <text x="120" y="190" font-family="sans-serif" font-size="10" text-anchor="middle" fill="#6b7280">NW-1002 Water Bottle</text>
+</svg>

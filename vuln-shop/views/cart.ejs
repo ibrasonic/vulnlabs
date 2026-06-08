@@ -1,0 +1,25 @@
+<%- include('partials/header') %>
+<h1>Your cart</h1>
+<% if (msg) { %><p class="ok">Cart <%= msg %>.</p><% } %>
+<% if (!items.length) { %>
+  <p>Cart is empty. <a href="/products">Browse products</a></p>
+<% } else { %>
+  <table>
+    <thead><tr><th>Item</th><th>SKU</th><th>Qty</th><th>Unit</th><th>Line</th><th></th></tr></thead>
+    <tbody>
+      <% items.forEach(i => { %>
+        <tr>
+          <td><%= i.name %></td>
+          <td><%= i.sku %></td>
+          <td><%= i.qty %></td>
+          <td>$<%= (i.price_cents / 100).toFixed(2) %></td>
+          <td>$<%= ((i.qty * i.price_cents) / 100).toFixed(2) %></td>
+          <td><a href="/cart/<%= cart.id %>/remove/<%= i.id %>">remove</a></td>
+        </tr>
+      <% }) %>
+    </tbody>
+    <tfoot><tr><th colspan="4">Total</th><th>$<%= (total / 100).toFixed(2) %></th><th></th></tr></tfoot>
+  </table>
+  <p><a href="/checkout" class="btn">Proceed to checkout &rarr;</a></p>
+<% } %>
+<%- include('partials/footer') %>

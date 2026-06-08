@@ -1,0 +1,15 @@
+node_modules
+npm-debug.log
+data/*.db
+data/*.db-journal
+data/*.db-wal
+data/*.db-shm
+public/uploads/*
+!public/uploads/.gitkeep
+.env
+*.log
+.git
+.gitignore
+.vscode
+smoke-test.log
+smoke-out.txt

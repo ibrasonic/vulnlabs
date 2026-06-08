@@ -1,0 +1,17 @@
+<%- include('partials/header') %>
+<h1>Support</h1>
+<% if (ok) { %><p class="ok">Thanks &mdash; an agent will reply within 1 business day.</p><% } %>
+<form method="post" action="/support/submit">
+  <label>Subject <input name="subject" required></label>
+  <label>Message <textarea name="body" rows="5" required></textarea></label>
+  <button>Send</button>
+</form>
+<h2>Your previous tickets</h2>
+<% for (const m of mine) { %>
+  <article class="ticket">
+    <h3><%- m.subject %></h3>
+    <p><%- m.body %></p>
+    <small><%= m.created_at %></small>
+  </article>
+<% } %>
+<%- include('partials/footer') %>

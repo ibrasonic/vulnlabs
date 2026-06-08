@@ -1,0 +1,17 @@
+<%- include('partials/header') %>
+<h1>Conversation with <%= other.display_name %> <span class="handle">@<%= other.username %></span></h1>
+<div class="thread">
+  <% messages.forEach(m => { %>
+    <div class="dm <%= m.sender_id === user.id ? 'mine' : 'theirs' %>">
+      <span class="sender"><%= m.sender_name %></span>
+      <span class="ts"><%= m.created_at %></span>
+      <p><%- m.body %></p>
+    </div>
+  <% }) %>
+</div>
+<form method="get" action="/dm/send" class="dm-compose">
+  <input type="hidden" name="to" value="<%= other.id %>">
+  <input name="body" placeholder="Send a message" autocomplete="off">
+  <button>Send</button>
+</form>
+<%- include('partials/footer') %>

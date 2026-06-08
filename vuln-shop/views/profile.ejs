@@ -1,0 +1,15 @@
+<%- include('partials/header') %>
+<h1>Profile</h1>
+<% if (msg) { %><p class="ok"><%= msg %></p><% } %>
+<% if (error) { %><p class="error"><%= error %></p><% } %>
+<form method="post" action="/profile">
+  <label>Full name <input name="full_name" value="<%= u.full_name %>"></label>
+  <label>Address <input name="address" value="<%= u.address %>"></label>
+  <label>Profile settings (JSON, deep-merged)
+    <textarea name="settings" rows="4" placeholder='{"theme":"dark"}'></textarea>
+  </label>
+  <button>Save</button>
+</form>
+<p><a href="/profile/perks-check">Check perks (JSON)</a></p>
+<p>Store credits: $<%= (u.credits_cents / 100).toFixed(2) %></p>
+<%- include('partials/footer') %>
