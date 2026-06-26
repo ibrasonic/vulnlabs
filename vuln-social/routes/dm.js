@@ -43,6 +43,8 @@ router.get('/send', (req, res) => {
   const to = parseInt(req.query.to || '0', 10);
   const body = req.query.body || '';
   if (!to || !body) return res.status(400).send('missing to or body');
+  const recipient = db.prepare('SELECT id FROM users WHERE id = ?').get(to);
+  if (!recipient) return res.status(404).send('recipient not found');
   db.prepare('INSERT INTO dms (sender_id, recipient_id, body) VALUES (?, ?, ?)')
     .run(req.session.userId, to, body);
   res.redirect('/dm/thread?with=' + to);

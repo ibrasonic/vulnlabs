@@ -6,6 +6,7 @@
 const express = require('express');
 const router = express.Router();
 const fetch = require('node-fetch');
+const db = require('../lib/db');
 
 router.get('/', (req, res) => {
   res.render('contact', { msg: '', error: null });
@@ -13,6 +14,10 @@ router.get('/', (req, res) => {
 
 router.post('/', async (req, res) => {
   const { name, email, subject, body } = req.body;
+  const userId = req.session && req.session.userId ? req.session.userId : null;
+  db.prepare(
+    `INSERT INTO support_messages (user_id, subject, body) VALUES (?, ?, ?)`
+  ).run(userId, subject || '', body || '');
   const url = req.app.locals.EMAIL_SERVICE + '/render';
   try {
     const r = await fetch(url, {
@@ -27,7 +32,7 @@ router.post('/', async (req, res) => {
     const txt = await r.text();
     res.render('contact', { msg: 'Email queued. Render preview:\n' + txt, error: null });
   } catch (e) {
-    res.render('contact', { msg: '', error: 'email-service unreachable: ' + e.message });
+    res.render('contact', { msg: 'Message saved.', error: 'email-service unreachable: ' + e.message });
   }
 });
 

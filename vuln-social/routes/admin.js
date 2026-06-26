@@ -47,7 +47,20 @@ router.get('/users/:id/promote', (req, res) => {
 });
 
 router.get('/users/:id/delete', (req, res) => {
-  db.prepare('DELETE FROM users WHERE id = ?').run(req.params.id);
+  const uid = req.params.id;
+  const postIds = db.prepare('SELECT id FROM posts WHERE user_id = ?').all(uid).map(r => r.id);
+  for (const pid of postIds) {
+    db.prepare('DELETE FROM comments WHERE post_id = ?').run(pid);
+    db.prepare('DELETE FROM reports  WHERE post_id = ?').run(pid);
+  }
+  db.prepare('DELETE FROM comments WHERE user_id = ?').run(uid);
+  db.prepare('DELETE FROM reports  WHERE reporter_id = ?').run(uid);
+  db.prepare('DELETE FROM posts    WHERE user_id = ?').run(uid);
+  db.prepare('DELETE FROM follows  WHERE follower_id = ? OR followee_id = ?').run(uid, uid);
+  db.prepare('DELETE FROM dms      WHERE sender_id = ? OR recipient_id = ?').run(uid, uid);
+  db.prepare('DELETE FROM ai_logs  WHERE user_id = ?').run(uid);
+  db.prepare('DELETE FROM uploads  WHERE user_id = ?').run(uid);
+  db.prepare('DELETE FROM users    WHERE id = ?').run(uid);
   res.redirect('/admin/users');
 });
 

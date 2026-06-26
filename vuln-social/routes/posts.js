@@ -26,6 +26,8 @@ router.post('/', requireSession, (req, res) => {
 });
 
 router.post('/:id/comments', requireSession, (req, res) => {
+  const post = db.prepare('SELECT id FROM posts WHERE id = ?').get(req.params.id);
+  if (!post) return res.status(404).send('post not found');
   const body = req.body.body || '';
   db.prepare('INSERT INTO comments (post_id, user_id, body) VALUES (?, ?, ?)').run(req.params.id, req.session.userId, body);
   res.redirect('/p/' + req.params.id);
@@ -33,6 +35,8 @@ router.post('/:id/comments', requireSession, (req, res) => {
 
 // VULN: report endpoint accepts GET so it is CSRF-able.
 router.get('/:id/report', requireSession, (req, res) => {
+  const post = db.prepare('SELECT id FROM posts WHERE id = ?').get(req.params.id);
+  if (!post) return res.status(404).send('post not found');
   db.prepare('INSERT INTO reports (post_id, reporter_id, reason) VALUES (?, ?, ?)')
     .run(req.params.id, req.session.userId, req.query.reason || 'unspecified');
   db.prepare('UPDATE posts SET flagged = 1 WHERE id = ?').run(req.params.id);

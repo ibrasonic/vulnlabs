@@ -33,11 +33,24 @@ router.get('/', requireSession, (req, res) => {
 });
 
 router.post('/upload', requireSession, upload.single('file'), (req, res) => {
-  // VULN: account_id from form — no ownership check, so a customer can attach
-  // a statement to ANOTHER customer's account.
-  const accountId = parseInt(req.body.account_id, 10);
+  // VULN: account_number from form — no ownership check, so a customer can
+  // attach a statement to ANOTHER customer's account.
+  const acctRef = (req.body.account_number || req.body.account_id || '').toString().trim();
+  if (!req.file) return res.redirect('/statements?ok=no-file');
+  const acct = /^\d+$/.test(acctRef)
+    ? db.prepare('SELECT id FROM accounts WHERE id = ?').get(parseInt(acctRef, 10))
+    : db.prepare('SELECT id FROM accounts WHERE account_number = ?').get(acctRef);
+  if (!acct) {
+    const stmts = db.prepare(`
+      SELECT statements.*, accounts.account_number
+      FROM statements JOIN accounts ON accounts.id = statements.account_id
+      WHERE accounts.user_id = ?
+      ORDER BY statements.created_at DESC
+    `).all(req.session.userId);
+    return res.status(400).render('statements', { stmts, error: `Unknown account: ${acctRef}`, ok: null });
+  }
   db.prepare('INSERT INTO statements (account_id, filename, uploaded_by) VALUES (?, ?, ?)')
-    .run(accountId, req.file.filename, req.session.userId);
+    .run(acct.id, req.file.filename, req.session.userId);
   res.redirect('/statements?ok=uploaded');
 });
 
