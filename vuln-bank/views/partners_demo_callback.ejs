@@ -1,0 +1,29 @@
+<%- include('partials/header') %>
+<section>
+  <h1>OAuth callback</h1>
+  <% if (error) { %>
+    <p class="err">Error: <%= error %></p>
+  <% } else { %>
+    <p class="ok">Sign-in complete.</p>
+    <% if (claims) { %>
+      <h2>id_token claims</h2>
+      <pre><%= JSON.stringify(claims, null, 2) %></pre>
+      <p>You are now signed in to NovaTrust as <strong><%= claims.email %></strong>
+        (the demo RP merges accounts by the <code>email</code> claim).</p>
+    <% } %>
+    <h2>Token response</h2>
+    <pre><%= JSON.stringify(tokens, null, 2) %></pre>
+    <h2>Next steps</h2>
+    <ul>
+      <li>Hit <code>/oauth/userinfo</code> with the <code>access_token</code>
+        to retrieve claims:
+        <pre>curl -H "Authorization: Bearer &lt;access_token&gt;" \
+  http://localhost:3001/oauth/userinfo</pre></li>
+      <li>Decode the <code>id_token</code> at
+        <a href="https://jwt.io" rel="noopener">jwt.io</a> or with
+        <code>jwt.decode</code> — note <code>alg</code> in the header.</li>
+    </ul>
+  <% } %>
+  <p><a href="/partners/demo-app">Back to demo app</a></p>
+</section>
+<%- include('partials/footer') %>

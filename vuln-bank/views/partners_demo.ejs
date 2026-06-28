@@ -1,0 +1,50 @@
+<%- include('partials/header') %>
+<section>
+  <h1>Partner Portal (Demo Relying Party)</h1>
+  <p>This is a stand-in "third-party app" that integrates with NovaTrust's
+    OAuth 2.0 / OpenID Connect authorization server. Use the buttons below to
+    walk through different sign-in flows.</p>
+
+  <% if (error) { %><p class="err"><%- error %></p><% } %>
+
+  <h2>Standard sign-in (authorization code)</h2>
+  <p>
+    <a class="btn" href="/oauth/authorize?client_id=<%= client_id %>&response_type=code&scope=openid+email+profile&redirect_uri=<%= encodeURIComponent(redirect_uri) %>&state=<%= Math.random().toString(36).slice(2) %>">
+      Sign in with NovaTrust
+    </a>
+  </p>
+
+  <h2>Insecure variants (for lab use)</h2>
+  <ul>
+    <li><a href="/oauth/authorize?client_id=<%= client_id %>&response_type=token+id_token&scope=openid+email+profile&redirect_uri=<%= encodeURIComponent(redirect_uri) %>&state=implicit">
+      Implicit flow — tokens in URL fragment
+    </a></li>
+    <li><a href="/oauth/authorize?client_id=<%= client_id %>&response_type=code&scope=openid+email&redirect_uri=<%= encodeURIComponent(redirect_uri) %>&id_token_signing_alg=none">
+      Auth-code flow requesting <code>id_token</code> alg=none
+    </a></li>
+    <li><a href="/oauth/authorize?client_id=<%= client_id %>&response_type=code&scope=openid+email&redirect_uri=<%= encodeURIComponent(redirect_uri) %>&prompt=none&login_hint=j.morgan@vulnbank.test">
+      nOAuth: <code>prompt=none</code> with <code>login_hint=j.morgan@vulnbank.test</code>
+    </a></li>
+    <li><a href="/oauth/authorize?client_id=<%= client_id %>&response_type=code&scope=openid+email&redirect_uri=<%= encodeURIComponent(redirect_uri) %>.evil.example/&state=lax">
+      Lax <code>redirect_uri</code> — appends <code>.evil.example/</code>
+    </a></li>
+  </ul>
+
+  <h2>Discovery</h2>
+  <p>
+    <a href="/.well-known/openid-configuration">/.well-known/openid-configuration</a> &middot;
+    <a href="/.well-known/jwks.json">/.well-known/jwks.json</a>
+  </p>
+
+  <h2>Registered clients</h2>
+  <table>
+    <thead><tr><th>client_id</th><th>auth</th><th>redirect_uri(s)</th></tr></thead>
+    <tbody>
+      <tr><td><code>partner-portal</code></td><td>confidential (secret <code>partner-portal-secret-2024</code>)</td>
+        <td><code>http://localhost:3001/partners/demo-app/callback</code></td></tr>
+      <tr><td><code>novatrust-mobile</code></td><td>public</td>
+        <td><code>novatrustapp://callback</code>, <code>http://localhost:3001/partners/mobile/callback</code></td></tr>
+    </tbody>
+  </table>
+</section>
+<%- include('partials/footer') %>

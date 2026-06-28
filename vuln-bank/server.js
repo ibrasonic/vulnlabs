@@ -70,6 +70,7 @@ app.use('/statements', require('./routes/statements'));
 app.use('/admin',    require('./routes/admin'));
 app.use('/support',  require('./routes/support'));
 app.use('/api',      require('./routes/api'));
+app.use('/',         require('./routes/oauth'));
 
 // VULN: a "debug" endpoint left enabled in production (A05 / Ch 17).
 app.get('/debug', (req, res) => {
@@ -108,6 +109,8 @@ app.listen(PORT, HOST, () => {
   console.log(` Admin panel: http://localhost:${PORT}/admin (login as julie.morgan)`);
   console.log(` Debug:       http://localhost:${PORT}/debug`);
   console.log(` API base:    http://localhost:${PORT}/api`);
+  console.log(` OAuth IdP:   http://localhost:${PORT}/.well-known/openid-configuration`);
+  console.log(` OAuth RP:    http://localhost:${PORT}/partners/demo-app`);
   console.log(``);
   console.log(` Test creds:  alice.chen / Password123!  (customer)`);
   console.log(`              julie.morgan / Admin2024!   (admin)`);

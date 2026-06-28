@@ -61,6 +61,16 @@ Hidden secret in JS bundle: sk_live_NOVATRUST_DEBUG_4242424242424242
  [40]  Vulnerable component — jQuery 1.12.4 loaded (Ch 18)
  [41]  Audit logging — no failed-login records (Ch 21)
  [42]  Information leak — admin views return password_md5 + SSN in JSON (Ch 12)
+ [43]  OAuth — lax redirect_uri (prefix match)        (Ch 24)
+ [44]  OAuth — state parameter not validated by RP    (Ch 24)
+ [45]  OAuth — implicit flow (token in URL fragment)  (Ch 24)
+ [46]  OAuth — PKCE code_challenge_method=plain accepted (Ch 24)
+ [47]  OAuth — authorization code reusable, 24h TTL   (Ch 24)
+ [48]  OAuth — id_token alg=none accepted by IdP & RP (Ch 18, 24)
+ [49]  OAuth — /userinfo ignores scope (returns full PII) (Ch 24)
+ [50]  OAuth — nOAuth (prompt=none + login_hint = ATO) (Ch 24)
+ [51]  OAuth — ROPC grant on public client            (Ch 24)
+ [52]  OAuth — predictable refresh tokens             (Ch 24)
 
 
 --------------------------------------------------------------------------------
@@ -589,6 +599,152 @@ EXPLOIT
 MITIGATION
   Even for admins, don't expose hashes or full PII without a redaction layer
   and audit trail. Never expose a reset token after issuance.
+
+
+--------------------------------------------------------------------------------
+ [43] OAuth - lax redirect_uri (prefix match)
+--------------------------------------------------------------------------------
+Endpoint:   GET /oauth/authorize, POST /oauth/token
+Files:      routes/oauth.js (redirectUriAllowed: uses startsWith)
+
+EXPLOIT
+  # Registered redirect_uri: http://localhost:3001/partners/demo-app/callback
+  # Attacker appends a hostile suffix that startsWith() accepts:
+  curl -i -b cookies.txt \
+    "http://localhost:3001/oauth/authorize?client_id=partner-portal&response_type=code&scope=openid&redirect_uri=http%3A%2F%2Flocalhost%3A3001%2Fpartners%2Fdemo-app%2Fcallback.evil.example%2F&state=x"
+  # IdP issues a code and redirects to the attacker host.
+
+MITIGATION
+  Compare redirect_uri with exact string equality. Reject query strings and
+  fragments unless explicitly registered.
+
+--------------------------------------------------------------------------------
+ [44] OAuth - state parameter ignored at RP callback
+--------------------------------------------------------------------------------
+Endpoint:   GET /partners/demo-app/callback
+
+EXPLOIT
+  Attacker logs in to NovaTrust, requests a code for themselves, then sends
+  the victim:
+    http://localhost:3001/partners/demo-app/callback?code=<ATTACKER_CODE>&state=anything
+  The RP exchanges the code, decodes the id_token, and signs the victim in
+  AS THE ATTACKER (account-stitch attack).
+
+MITIGATION
+  Bind state to the RP's session before /authorize; verify on the callback.
+
+--------------------------------------------------------------------------------
+ [45] OAuth - implicit flow (token in URL fragment)
+--------------------------------------------------------------------------------
+Endpoint:   GET /oauth/authorize?response_type=token (or token id_token)
+
+EXPLOIT
+  Tokens are returned as URL fragments, exposing them to browser history,
+  Referer headers (if the callback page contains an outbound link), and to
+  any JS running on the callback page.
+
+MITIGATION
+  Drop implicit flow. Require response_type=code with PKCE for SPAs.
+
+--------------------------------------------------------------------------------
+ [46] OAuth - PKCE code_challenge_method=plain accepted
+--------------------------------------------------------------------------------
+Endpoint:   POST /oauth/token
+
+EXPLOIT
+  Attacker observes the authorization request (browser history, Referer,
+  proxy logs) and extracts code_challenge. They submit the same value as
+  code_verifier and pass PKCE.
+
+MITIGATION
+  Require code_challenge_method=S256. Reject plain.
+
+--------------------------------------------------------------------------------
+ [47] OAuth - authorization code reusable, 24h TTL
+--------------------------------------------------------------------------------
+Endpoint:   POST /oauth/token
+
+EXPLOIT
+  Capture the code (via referer leak, proxy log, lax redirect_uri, etc.).
+  Replay it any time within 24 hours to mint new tokens.
+
+MITIGATION
+  Single-use codes; invalidate on first exchange. RFC 6749 mandates 10-minute
+  max TTL. Bind code to client_id and redirect_uri.
+
+--------------------------------------------------------------------------------
+ [48] OAuth - id_token alg=none accepted
+--------------------------------------------------------------------------------
+Endpoint:   GET /oauth/authorize (id_token_signing_alg=none), and RP callback
+
+EXPLOIT
+  Client requests:
+    /oauth/authorize?...&id_token_signing_alg=none
+  IdP emits an unsigned id_token (header.alg=none, empty signature).
+  Demo RP decodes it without verifying alg. An attacker who can MitM the
+  callback can forge an unsigned id_token claiming any user.
+
+MITIGATION
+  Hardcode supported algorithms server-side (HS256, RS256, ES256). Reject
+  alg=none and disable alg-confusion (e.g. HS256 with the RSA public key).
+
+--------------------------------------------------------------------------------
+ [49] OAuth - /userinfo ignores scope
+--------------------------------------------------------------------------------
+Endpoint:   GET /oauth/userinfo
+
+EXPLOIT
+  Request a token with scope=openid only. Then:
+    curl -H "Authorization: Bearer $T" http://localhost:3001/oauth/userinfo
+  Response includes ssn, dob, phone_number, address, and role - all PII.
+
+MITIGATION
+  Map scopes to claim sets. openid -> sub only; email -> +email; profile ->
+  +name, +preferred_username; etc. Never return SSN or DOB unless the scope
+  was explicitly granted and consented to.
+
+--------------------------------------------------------------------------------
+ [50] OAuth - nOAuth (prompt=none + login_hint = ATO)
+--------------------------------------------------------------------------------
+Endpoint:   GET /oauth/authorize?prompt=none&login_hint=<victim_email>
+
+EXPLOIT
+  Attacker (authenticated as themselves) requests:
+    /oauth/authorize?...&prompt=none&login_hint=victim@bank.test
+  IdP issues an id_token whose `email` claim is the victim's email, but the
+  `sub` belongs to the attacker. The RP merges accounts by `email` and signs
+  the attacker in AS THE VICTIM. (Real bug class: nOAuth, 2023.)
+
+MITIGATION
+  Merge accounts by `sub`, never by `email`. Treat `email_verified` as a
+  hint only; re-verify with a fresh email-confirmation flow.
+
+--------------------------------------------------------------------------------
+ [51] OAuth - ROPC grant on public client
+--------------------------------------------------------------------------------
+Endpoint:   POST /oauth/token (grant_type=password)
+
+EXPLOIT
+  curl -X POST http://localhost:3001/oauth/token \
+    -d 'grant_type=password&username=alice.chen&password=Password123!&scope=openid&client_id=novatrust-mobile'
+  No client_secret required - plaintext password to a "third-party" client.
+
+MITIGATION
+  Remove ROPC (deprecated by OAuth 2.1). Require redirect-based flows.
+
+--------------------------------------------------------------------------------
+ [52] OAuth - predictable refresh tokens
+--------------------------------------------------------------------------------
+EXPLOIT
+  echo -n "1:1718999999999" | base64
+  # MToxNzE4OTk5OTk5OTk5
+  # Submit as refresh_token: time-ranged brute force is feasible because the
+  # token is base64(user_id ':' epoch_ms).
+
+MITIGATION
+  refresh_token must be cryptographically random and at least 128 bits of
+  entropy. Rotate on every use. Bind to client_id, scope and (optionally)
+  device fingerprint.
 
 
 ================================================================================

@@ -1,0 +1,29 @@
+<%- include('partials/header') %>
+<section class="auth-card">
+  <h1>Authorize <%- app.name %></h1>
+  <p>This application is requesting access to your NovaTrust account.</p>
+  <h2>Permissions requested</h2>
+  <ul>
+    <% for (const s of scopes) { %><li><code><%- s %></code></li><% } %>
+  </ul>
+  <p class="muted">Signed in as <strong><%- user.username %></strong>.
+    <a href="/logout">Use a different account</a>.
+  </p>
+  <p class="hint">Redirecting back to: <code><%- redirect_uri %></code></p>
+  <form method="post" action="/oauth/authorize" class="stacked">
+    <input type="hidden" name="client_id" value="<%= app.client_id %>">
+    <input type="hidden" name="redirect_uri" value="<%= redirect_uri %>">
+    <input type="hidden" name="response_type" value="<%= response_type %>">
+    <input type="hidden" name="scope" value="<%= scopes.join(' ') %>">
+    <input type="hidden" name="state" value="<%= state %>">
+    <input type="hidden" name="nonce" value="<%= nonce %>">
+    <input type="hidden" name="code_challenge" value="<%= code_challenge %>">
+    <input type="hidden" name="code_challenge_method" value="<%= code_challenge_method %>">
+    <input type="hidden" name="id_token_signing_alg" value="<%= id_token_signing_alg %>">
+    <div style="display:flex;gap:10px;margin-top:18px">
+      <button name="decision" value="allow">Allow</button>
+      <button name="decision" value="deny" class="btn ghost" type="submit">Deny</button>
+    </div>
+  </form>
+</section>
+<%- include('partials/footer') %>
