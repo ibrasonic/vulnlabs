@@ -193,6 +193,17 @@ const insertUpload = db.prepare(`INSERT INTO uploads (user_id, filename, purpose
 insertUpload.run(userIds['admin_kate'],    'spring-2026-lookbook.pdf', 'marketing');
 insertUpload.run(userIds['amelia.haddad'], 'bent-tent-pole.jpg',       'support-ticket');
 
+// Flag file readable only after RCE via /cart/import (V-SHOP-100).
+const fs = require('fs');
+const path = require('path');
+const flagDir = path.join(__dirname, 'data');
+fs.mkdirSync(flagDir, { recursive: true });
+fs.writeFileSync(
+  path.join(flagDir, '.deserialize-flag'),
+  'AccessibleBBB{deserialize-node-serialize-rce}\n',
+  { encoding: 'utf8' }
+);
+
 console.log('Seed complete. Test credentials:');
 for (const u of users) console.log(`  ${u.username.padEnd(18)} / ${u.password.padEnd(16)}  (${u.role})`);
 console.log('Coupons: SUMMER25 25%, VIP10 10%, FREESHIP 5%, NEWUSER15 15%, REI2026 20%, STAFF50 50%');

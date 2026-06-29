@@ -1,0 +1,9 @@
+<%- include('partials/header') %>
+<h1>Export cart</h1>
+<p>
+  Share your <strong><%= count %></strong>-item cart with another device or
+  another shopper. Paste the token below into <a href="/cart/import">/cart/import</a>.
+</p>
+<textarea readonly rows="6" style="width: 100%; font-family: monospace; font-size: 0.85em;"><%= token %></textarea>
+<p style="margin-top: 1em;"><a href="/cart" class="btn">&larr; Back to cart</a></p>
+<%- include('partials/footer') %>
