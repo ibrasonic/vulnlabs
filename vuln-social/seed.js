@@ -7,7 +7,7 @@ db.exec(`
   DELETE FROM ai_logs; DELETE FROM reports;
   DELETE FROM dms; DELETE FROM follows;
   DELETE FROM comments; DELETE FROM posts;
-  DELETE FROM uploads; DELETE FROM users;
+  DELETE FROM uploads; DELETE FROM kb_docs; DELETE FROM users;
 `);
 
 const users = [
@@ -129,6 +129,34 @@ const insertReport = db.prepare(`INSERT INTO reports (post_id, reporter_id, reas
 insertReport.run(postIds[11], userIds['kofi'], 'Promotes commercial veterinary practice', 'open', '2026-05-22 18:00:00');
 insertReport.run(postIds[8],  userIds['mod_sasha'], 'Possible 0day disclosure without coordination', 'investigating', '2026-05-21 14:30:00');
 insertReport.run(postIds[20], userIds['theo'], 'Tone seems aggressive', 'closed', '2026-05-22 13:00:00');
+
+// VULN: knowledge-base seed for RAG sink. Two rows are marked
+// visibility='internal' and carry moderator-only material; the retrieval
+// code at routes/ai.js ignores the column, which is V-SOC-085. The rest are
+// genuinely public and exist so retrieval has plausible matches for benign
+// queries.
+const kbDocs = [
+  { title: 'Welcome to Pulse Social', visibility: 'public',
+    content: 'Pulse is a microblogging network for short text posts, images, and conversations. Sign up at /register, configure your bio at /profile, and follow other users from /u/<username>.',
+    tags: 'onboarding,welcome,getting-started' },
+  { title: 'How to appeal a takedown', visibility: 'public',
+    content: 'If your post was flagged or removed, open /admin from your settings menu and submit an appeal with the original post id and a short reason. Appeals are typically reviewed within 48 hours by a community moderator.',
+    tags: 'moderation,appeals,takedown' },
+  { title: 'Accessibility on Pulse', visibility: 'public',
+    content: 'Pulse aims to follow WCAG 2.2 AA. All controls are keyboard-reachable, every image upload prompts for alt text, and the feed supports both light and dark high-contrast themes. Report any accessibility issue via /contact.',
+    tags: 'accessibility,a11y,wcag' },
+  { title: 'Direct messages and privacy', visibility: 'public',
+    content: 'Direct messages are private to the two participants. Set /profile dm_requests to follows-only or no-one to restrict who can message you. Pulse does not currently support end-to-end encryption on DMs; treat them as confidential, not secret.',
+    tags: 'dms,privacy,messaging' },
+  { title: 'Moderator escalation hotline', visibility: 'internal',
+    content: 'For after-hours coordinated abuse incidents, page the trust-and-safety lead at extension 4421 and use the override code PulseMod-2024-EscalateOverride! when prompted. The hotline routes to the on-call moderator pager at https://internal.pulse.test/oncall (intranet only).',
+    tags: 'moderator,oncall,hotline,internal' },
+  { title: 'Trust & safety pager rotation', visibility: 'internal',
+    content: 'Weekly rotation, primary then secondary: admin_eli (primary), mod_sasha (secondary). Rotation flips Mondays 09:00 UTC. Secrets and runbooks live in the staff vault under the moderation/ path; the vault unlock phrase is "kelp grows where urchins fall".',
+    tags: 'moderator,oncall,rotation,internal,runbook' }
+];
+const insertDoc = db.prepare(`INSERT INTO kb_docs (title, content, tags, visibility) VALUES (?, ?, ?, ?)`);
+for (const d of kbDocs) insertDoc.run(d.title, d.content, d.tags, d.visibility);
 
 console.log('Seed complete. Credentials:');
 for (const u of users) console.log(`  ${u.username.padEnd(12)} / ${u.password.padEnd(14)}  (${u.role})`);

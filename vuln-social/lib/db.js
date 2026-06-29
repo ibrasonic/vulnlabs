@@ -82,6 +82,15 @@ db.exec(`
     purpose TEXT,
     created_at TEXT DEFAULT (datetime('now'))
   );
+
+  CREATE TABLE IF NOT EXISTS kb_docs (
+    id INTEGER PRIMARY KEY,
+    title TEXT NOT NULL,
+    content TEXT NOT NULL,                 -- VULN: retrieved + concatenated into LLM prompt
+    tags TEXT DEFAULT '',
+    visibility TEXT DEFAULT 'public',      -- VULN: 'internal' never enforced at retrieval
+    created_at TEXT DEFAULT (datetime('now'))
+  );
 `);
 
 module.exports = db;

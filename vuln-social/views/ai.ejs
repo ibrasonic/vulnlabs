@@ -5,11 +5,52 @@
 <form method="post" action="/ai-summary/summarize">
   <label>Post ID <input name="post_id" value="<%= postId %>"></label>
   <label>Moderator context <input name="extra_context" placeholder="optional"></label>
+  <label>Mode
+    <select name="mode">
+      <option value="summary">summary (default)</option>
+      <option value="agent">agent (with web_fetch tool)</option>
+    </select>
+  </label>
   <button>Summarize</button>
 </form>
+
+<h2>Knowledge-base search (RAG)</h2>
+<p class="muted">Query the internal help desk &mdash; retrieves docs and recent community posts to answer.</p>
+<form method="post" action="/ai-summary/search">
+  <label>Question <input name="q" value="<%= searchQuery || '' %>" placeholder="how do I appeal a takedown?"></label>
+  <button>Ask</button>
+</form>
+
 <% if (summary) { %>
   <h2>Summary</h2>
   <pre class="ai"><%= summary %></pre>
+<% } %>
+<% if (agentTrace) { %>
+  <h2>Agent trace</h2>
+  <ol>
+    <% agentTrace.forEach(function(s){ %>
+      <li><strong>step <%= s.step %></strong> [<%= s.provider %>]: <pre class="ai"><%= s.text %></pre></li>
+    <% }) %>
+  </ol>
+<% } %>
+<% if (searchHits) { %>
+  <h2>Retrieved snippets</h2>
+  <table class="grid">
+    <thead><tr><th>#</th><th>Kind</th><th>ID</th><th>Title</th><th>Visibility</th><th>Score</th><th>Body (truncated)</th></tr></thead>
+    <tbody>
+      <% searchHits.forEach(function(h, i){ %>
+        <tr>
+          <td><%= i + 1 %></td>
+          <td><%= h.kind %></td>
+          <td><%= h.id %></td>
+          <td><%= h.title %></td>
+          <td><%= h.visibility %></td>
+          <td><%= h.score %></td>
+          <td><code><%= (h.body || '').slice(0, 160) %></code></td>
+        </tr>
+      <% }) %>
+    </tbody>
+  </table>
 <% } %>
 <h2>Recent activity</h2>
 <table class="grid">
