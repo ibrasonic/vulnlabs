@@ -24,6 +24,30 @@
   document.addEventListener('DOMContentLoaded', applyHashMessage);
 })();
 
+// VULN: DOM XSS via location.search -- `?banner=` value is read on every
+// page load and assigned to innerHTML of a banner slot. Unlike the hash
+// sink above, this one IS sent to the server (so it shows up in History),
+// but the bug still lives entirely in the browser. Try
+//   /accounts?banner=%3Cimg%20src%3Dx%20onerror%3Dalert(1)%3E
+(function () {
+  function applyBanner() {
+    var p = new URLSearchParams(location.search);
+    var b = p.get('banner');
+    if (!b) return;
+    var slot = document.getElementById('promo-banner');
+    if (!slot) {
+      slot = document.createElement('div');
+      slot.id = 'promo-banner';
+      slot.className = 'hint';
+      var main = document.querySelector('main.container');
+      if (main) main.prepend(slot);
+    }
+    // sink:
+    slot.innerHTML = b;
+  }
+  document.addEventListener('DOMContentLoaded', applyBanner);
+})();
+
 // "Internal" telemetry endpoint URL — the bundle bakes it in.
 window.__NOVA_TRUST__ = {
   apiBase: '/api',

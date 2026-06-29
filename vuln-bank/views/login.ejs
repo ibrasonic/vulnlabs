@@ -11,4 +11,12 @@
   </form>
   <p class="auth-links"><a href="/register">Open an account</a> &middot; <a href="/forgot">Forgot password?</a></p>
 </section>
+<script>
+  // VULN: `next` reflected into a JavaScript string literal with only the
+  // `"` character escaped. The `\` character is NOT escaped, so a payload
+  // ending in `\"` slips past the half-baked escape and the next `";`
+  // opens a fresh JavaScript statement.
+  var lastNext = "<%- (typeof next === 'string' ? next : '').replace(/"/g, '\\"') %>";
+  if (lastNext && lastNext !== '/accounts') { console.log('[bank] next =', lastNext); }
+</script>
 <%- include('partials/footer') %>

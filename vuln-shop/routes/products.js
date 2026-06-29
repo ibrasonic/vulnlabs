@@ -25,17 +25,30 @@ router.get('/', (req, res) => {
 });
 
 // VULN: SQL injection on search query.
+// Also: reflected XSS variants. The query parameter `q` is reflected into
+// the page in TWO contexts:
+//   * element body (always unescaped) -> classic reflected XSS
+//   * <input value="..."> attribute (only `<` and `>` are escaped) ->
+//     attribute breakout via `"`, e.g. q=" autofocus onfocus=alert(1) x="
+// The ?safe=1 mode forces the `<>`-only encoder on the element body too,
+// so the only remaining path is the attribute breakout. Real-world
+// half-fix.
 // IMPORTANT: register before `/:id`.
 router.get('/search', (req, res) => {
   const q = req.query.q || '';
+  const safe = req.query.safe === '1';
+  // Naive sanitiser: encodes `<` and `>` ONLY. Quotes pass through.
+  const lt = (s) => String(s).replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  const qBody = safe ? lt(q) : q;
+  const qAttr = lt(q);
   try {
     const rows = db.prepare(`
       SELECT * FROM products
       WHERE name LIKE '%${q}%' OR description LIKE '%${q}%' OR sku LIKE '%${q}%'
     `).all();
-    res.render('product_search', { rows, q, error: null });
+    res.render('product_search', { rows, q: qBody, qAttr, safe, error: null });
   } catch (e) {
-    res.status(500).render('product_search', { rows: [], q, error: e.message });
+    res.status(500).render('product_search', { rows: [], q: qBody, qAttr, safe, error: e.message });
   }
 });
 

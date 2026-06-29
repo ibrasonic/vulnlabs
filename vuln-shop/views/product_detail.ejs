@@ -19,12 +19,25 @@
 
 <h2>Reviews</h2>
 <% if (msg === 'review_added') { %><p class="ok">Review added.</p><% } %>
+<%
+  // VULN: tiny "markdown" helper rendered inline. Turns [text](url) into an
+  // anchor tag with NO scheme validation -- `javascript:` URIs are kept as-is.
+  // Raw HTML in the body is also passed through (no sanitisation), so this
+  // sink ALSO accepts `<img src=x onerror=...>` etc. Stored XSS via either
+  // path.
+  function renderReviewMd(s) {
+    s = String(s || '');
+    return s.replace(/\[([^\]]+)\]\(([^)]+)\)/g, function (_, text, url) {
+      return '<a href="' + url + '">' + text + '</a>';
+    });
+  }
+%>
 <ul class="reviews">
   <% reviews.forEach(r => { %>
     <li>
       <strong><%= r.username || 'guest' %></strong>
       &middot; <%= r.rating %>/5
-      <div class="body"><%- r.body %></div>
+      <div class="body"><%- renderReviewMd(r.body) %></div>
     </li>
   <% }) %>
 </ul>

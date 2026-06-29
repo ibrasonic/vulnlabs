@@ -1,6 +1,15 @@
 <%- include('partials/header') %>
 <h1>Search results for &ldquo;<%- q %>&rdquo;</h1>
 <% if (typeof error !== 'undefined' && error) { %><p class="err"><%- error %></p><% } %>
+<% if (typeof strictMode !== 'undefined' && strictMode) { %>
+  <p class="hint">Strict mode is on (literal &lt;script&gt; tags are stripped).</p>
+<% } %>
+<form method="get" action="/accounts/search" class="refine">
+  <label>Refine search
+    <input type="text" name="q" value="<%- q %>">
+  </label>
+  <button>Search again</button>
+</form>
 <table>
   <thead><tr><th>Holder</th><th>Account</th><th>Balance</th></tr></thead>
   <tbody>
