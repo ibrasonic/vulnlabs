@@ -73,6 +73,7 @@ app.use('/contact', require('./routes/contact'));
 app.use('/import', require('./routes/import'));
 app.use('/proxy', require('./routes/proxy'));
 app.use('/api', require('./routes/api'));
+app.use('/graphql', require('./routes/graphql'));
 
 // VULN: debug endpoint in production
 app.get('/debug', (req, res) => {

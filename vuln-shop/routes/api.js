@@ -63,21 +63,6 @@ router.get('/v1/users', (req, res) => {
   res.json(db.prepare('SELECT id, username, email, password_md5, role FROM users').all());
 });
 
-// Tiny GraphQL-ish endpoint with NO depth limiting + no introspection guard.
-// VULN: arbitrary query operators -> auth bypass + dump.
-router.post('/graphql', (req, res) => {
-  const q = (req.body && req.body.query) || '';
-  // toy parser: supports `users`, `products`, `orders`
-  if (/users\s*\{/.test(q)) {
-    return res.json({ data: { users: db.prepare('SELECT * FROM users').all() } });
-  }
-  if (/products\s*\{/.test(q)) {
-    return res.json({ data: { products: db.prepare('SELECT * FROM products').all() } });
-  }
-  if (/orders\s*\{/.test(q)) {
-    return res.json({ data: { orders: db.prepare('SELECT * FROM orders').all() } });
-  }
-  res.status(400).json({ errors: [{ message: 'unsupported query' }] });
-});
+// (real GraphQL endpoint lives in routes/graphql.js, mounted at /graphql)
 
 module.exports = router;

