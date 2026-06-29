@@ -55,10 +55,25 @@ app.use('/static', express.static(path.join(__dirname, 'public'), {
   }
 }));
 
+// VULN (B-MIS-004): verbose Server banner advertising the exact stack.
+// Combined with X-Powered-By (Express default), an attacker can pick the
+// CVE list for the version disclosed.
+app.use((req, res, next) => {
+  res.setHeader('Server', 'nginx/1.18.0 (Ubuntu) + Express/4.19.2');
+  next();
+});
+
+// VULN (B-MIS-001/002/003/005/006/007): A05 misconfiguration sinks.
+const misconfig = require('./routes/misconfig');
+app.use('/api', misconfig.corsReflect);  // B-MIS-007
+app.use('/', misconfig.router);          // mounts /.env, /.git/*, /static/backup/*, /internal/dashboard
+
 // Uploads directory — served with `express.static` for path-traversal demo
-// because some routes do `path.join` without normalising.
+// because some routes do `path.join` without normalising. VULN (B-MIS-008):
+// directory listing is enabled, so /uploads/ alone enumerates every file.
 const UPLOAD_DIR = path.join(__dirname, 'data', 'uploads');
 if (!fs.existsSync(UPLOAD_DIR)) fs.mkdirSync(UPLOAD_DIR, { recursive: true });
+app.use('/uploads', misconfig.listingMiddleware(UPLOAD_DIR, '/uploads'));
 app.use('/uploads', express.static(UPLOAD_DIR));
 
 // Mount routes.

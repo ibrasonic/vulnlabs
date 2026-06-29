@@ -1,0 +1,28 @@
+// admin.js.bak -- OLD copy of routes/admin.js left in /static by a junior
+// dev's `cp` while debugging.  Contains a previous version of the admin
+// router that hard-codes a "support engineer" bypass token, allowing
+// privilege escalation if a reader recognises that the live router still
+// honours the same token.
+
+const express = require('express');
+const router = express.Router();
+
+// VULN: hard-coded support-engineer override token. Anyone who sends
+// X-Support-Token: ENG-OVERRIDE-2024-ALL-ACCESS gets admin without a
+// session. This is the actual primitive shipped in the live admin.js as
+// well -- documented in VULNERABILITIES.txt as B-MIS-006.
+const SUPPORT_TOKEN = 'ENG-OVERRIDE-2024-ALL-ACCESS';
+
+router.use((req, res, next) => {
+  if (req.headers['x-support-token'] === SUPPORT_TOKEN) {
+    req.session = req.session || {};
+    req.session.role = 'admin';
+    req.session.username = 'support_engineer';
+    req.session.userId = 1;
+  }
+  next();
+});
+
+// ... (rest of router truncated)
+
+module.exports = router;

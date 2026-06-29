@@ -8,6 +8,21 @@ const router = express.Router();
 const db = require('../lib/db');
 const { requireSession } = require('../lib/auth');
 
+// VULN (B-MIS-006): hard-coded "support engineer" override token. Anyone
+// who sends `X-Support-Token: ENG-OVERRIDE-2024-ALL-ACCESS` is upgraded to
+// admin without authenticating. The token is leaked via the routes/admin
+// backup file at /static/backup/admin.js.bak (B-MIS-005).
+const SUPPORT_TOKEN = 'ENG-OVERRIDE-2024-ALL-ACCESS';
+router.use((req, res, next) => {
+  if (req.headers['x-support-token'] === SUPPORT_TOKEN) {
+    req.session = req.session || {};
+    req.session.role = 'admin';
+    req.session.username = 'support_engineer';
+    req.session.userId = 1;
+  }
+  next();
+});
+
 router.use(requireSession);
 
 // VULN: forgot the role check.
