@@ -1,0 +1,14 @@
+<%- include('partials/header', { title: 'Sign in - NovaPress' }) %>
+<section class="form-pane">
+  <h1>Sign in</h1>
+  <% if (error) { %><p class="error"><%= error %></p><% } %>
+  <form method="post" action="/login">
+    <input type="hidden" name="next" value="<%= next %>">
+    <label>Username <input name="username" required autofocus></label>
+    <label>Password <input name="password" type="password" required></label>
+    <button>Sign in</button>
+  </form>
+  <p class="tip">No account? <a href="/register">Register</a>.</p>
+  <p class="tip subtle">Demo accounts: emma.kovac / Pa55word! &middot; alice.lefebvre / Editor2024! &middot; richard.hong / Admin2024!</p>
+</section>
+<%- include('partials/footer') %>

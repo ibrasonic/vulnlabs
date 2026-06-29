@@ -1,0 +1,309 @@
+================================================================================
+  vuln-smuggle  /  NovaPress  -  vulnerability catalogue
+================================================================================
+
+This lab is a two-tier system:
+
+    +-----------------+        +--------------------+
+    |  Argus Edge     | -----> |  NovaPress back-end|
+    |  (gateway.js)   |  TCP   |  (backend.js)      |
+    |  CL-only parser |  pool  |  insecureHTTPParser|
+    |  0.0.0.0:3004   |        |  127.0.0.1:3094    |
+    +-----------------+        +--------------------+
+
+The bug class is HTTP Request Smuggling (CWE-444 / OWASP A06:2017 misuse).
+The two processes implement HTTP/1.1 with parsers that DISAGREE about how
+to frame request bodies when a request carries both Content-Length and
+Transfer-Encoding: chunked. The disagreement is real, the wire is real,
+and the resulting cross-request boundary corruption is real.
+
+  - Argus Edge frames bodies using Content-Length ONLY. It does not
+    implement Transfer-Encoding; the header is treated as a generic
+    unknown header and forwarded verbatim (the same behaviour as
+    Squid 3.x and various older CDN edge nodes).
+
+  - NovaPress runs on Node's HTTP server with `insecureHTTPParser: true`.
+    With that flag set, the llhttp parser accepts ambiguous CL+TE
+    requests and processes them per RFC 7230 - Transfer-Encoding wins.
+
+Connection reuse between the two tiers is REAL: Argus Edge maintains a
+small pool of persistent upstream TCP sockets (POOL_SIZE defaults to 1
+so the response-queue desync is directly observable; production CDNs
+keep larger pools and the same desync still poisons any client whose
+request lands on a polluted socket).
+
+The internal token NP-INTERNAL-2026 is the "trusted edge" value that
+the gateway adds on upstream traffic to authenticate paths the back-end
+treats as internal (admin panel, audit feed). Discovering this token is
+itself a vulnerability (V-SMG-005); using it inside a smuggled request
+is V-SMG-001.
+
+--------------------------------------------------------------------------------
+V-SMG-001  CL.TE desync via CL-only edge + TE-tolerant origin
+--------------------------------------------------------------------------------
+Vulnerability:
+  Argus Edge's request parser implements only Content-Length. The
+  NovaPress back-end's parser (insecureHTTPParser=true) honours
+  Transfer-Encoding: chunked when both headers are present.
+
+  Any request that carries both headers is therefore framed two
+  different ways by the two parsers. Bytes the back-end stops reading
+  before the gateway-declared CL boundary become the start of the next
+  request on the shared upstream TCP connection.
+
+Impact: arbitrary request prefix injection on every downstream client.
+
+Exploit recipe:
+  Send to the edge (port 3004) a POST that:
+    - declares a small Content-Length covering "0\r\n\r\n" + smuggled prefix;
+    - declares Transfer-Encoding: chunked;
+    - whose body is "0\r\n\r\n" (chunked terminator) followed by the
+      first bytes of the smuggled request.
+
+  Example:
+    POST /api/echo HTTP/1.1\r\n
+    Host: target\r\n
+    Content-Length: 95\r\n
+    Transfer-Encoding: chunked\r\n
+    Connection: keep-alive\r\n\r\n
+    0\r\n
+    \r\n
+    GET /admin HTTP/1.1\r\n
+    Host: target\r\n
+    X-Internal-Auth: NP-INTERNAL-2026\r\n\r\n
+
+  Gateway reads 95 bytes of body, forwards the whole envelope to the
+  back-end. Back-end reads chunked, terminates on the 0-chunk,
+  immediately consumes the trailing GET /admin as a SECOND request, and
+  emits two responses on the upstream socket.
+
+Mitigation:
+  - Implement Transfer-Encoding correctly at the edge, OR reject any
+    request that carries BOTH CL and TE with HTTP 400 and close the
+    socket.
+  - Disable HTTP/1.1 upstream entirely. Speak HTTP/2 end-to-end.
+  - Disable upstream connection reuse (mitigates cross-user impact at
+    a steep latency cost; does not eliminate request-tunnelling
+    variants).
+
+--------------------------------------------------------------------------------
+V-SMG-002  Bypass front-end path ACL on /cms and /admin
+--------------------------------------------------------------------------------
+Vulnerability:
+  Argus Edge enforces a path-based access control: requests to /cms/*
+  and /admin/* are rejected with HTTP 403 on the public ingress. The
+  back-end therefore implements its own check (X-Internal-Auth header
+  match for /admin; tier check for /cms) as defence in depth.
+
+  Both controls are defeated by smuggling. The smuggled inner request
+  reaches the back-end WITHOUT being parsed by the edge, so the path
+  ACL is never evaluated against it.
+
+Impact:
+  - Read editorial drafts (V-SMG-002 flag:
+      AccessibleBBB{smuggle-leak-unpublished-draft}).
+  - Reach /admin and surface the admin flag
+      AccessibleBBB{smuggle-bypass-frontend-acl}.
+
+Exploit recipe (admin):
+  Smuggle:
+    GET /admin HTTP/1.1
+    Host: target
+    X-Internal-Auth: NP-INTERNAL-2026
+
+  The internal token is recoverable via V-SMG-005 below. Trigger a
+  fresh non-cached request to the edge (any /?_cb=N query) to consume
+  the orphan /admin response from the upstream socket.
+
+Exploit recipe (draft leak):
+  Smuggle:
+    GET /cms/article/6 HTTP/1.1
+    Host: target
+    X-User-Tier: editor
+
+  X-User-Tier is the second "trusted upstream" header the back-end
+  honours when it sets req.effectiveTier. Argus Edge strips it from
+  inbound; smuggling bypasses that strip.
+
+Mitigation:
+  - Defence in depth must not rely on edge-stripped headers. Require
+    cryptographic proof (mTLS or signed JWT minted by the edge) for
+    any "internal" header the back-end trusts.
+  - Remove path-only ACLs from the edge if smuggling is feasible. The
+    only durable fix is to prevent the desync itself (V-SMG-001).
+
+--------------------------------------------------------------------------------
+V-SMG-003  Steal another user's request (cookie / auth header capture)
+--------------------------------------------------------------------------------
+Vulnerability:
+  The /article/:slug/comment endpoint accepts anonymous comments and
+  stores the urlencoded `body` field of the POST into the public
+  comment thread. Smuggle a POST /comment that declares a
+  Content-Length much larger than the body the attacker actually
+  supplies. The back-end stalls waiting for more body bytes. Whatever
+  arrives next on the SHARED upstream socket - the FIRST bytes of the
+  NEXT legitimate user's request - is consumed as the rest of the
+  comment body and stored verbatim.
+
+Impact:
+  - Session cookies of authenticated users (np_sid=...) become public
+    comments on the cup-final preview article.
+  - Authorization headers, internal tokens, and User-Agent fingerprints
+    leak the same way.
+  - Flag: AccessibleBBB{smuggle-capture-subscriber-cookie}.
+
+Exploit recipe:
+    smuggled inner:
+      POST /article/cup-final-preview/comment HTTP/1.1
+      Host: target
+      Content-Type: application/x-www-form-urlencoded
+      Content-Length: 200
+      Connection: keep-alive
+      <empty line>
+      body=LEAK
+
+    Then wait for any other client (any browser hitting the homepage
+    will do) to send a request through the gateway. Their request line
+    + Host + Cookie + User-Agent + ... fills the remaining 191 bytes
+    of the comment.
+
+  Read back at /article/cup-final-preview - the comment now contains
+  the victim's headers.
+
+Mitigation:
+  - Fix V-SMG-001.
+  - Validate body length on the back-end: enforce a hard cap of (say)
+    8 KB on /comment Content-Length even if framing permits more.
+  - Reject any inbound Content-Length whose declared value differs
+    from the actually-read body length.
+
+--------------------------------------------------------------------------------
+V-SMG-004  Response-queue desync / response poisoning
+--------------------------------------------------------------------------------
+Vulnerability:
+  When the back-end emits MORE responses than the gateway forwarded
+  requests on the same upstream socket (e.g. because the smuggled
+  inner request triggered an extra response), the unmatched response
+  ends up in the gateway's orphan queue. The next legitimate client
+  request that the gateway forwards on that socket gets the orphan
+  delivered instead of (or before) its real response.
+
+Impact:
+  - Reading another user's authenticated response (e.g. /api/me with
+    their session cookie attached by the gateway after their own
+    request was already in flight). Account takeover via stolen
+    session metadata.
+  - Flag: AccessibleBBB{smuggle-response-queue-poison}.
+
+Exploit recipe:
+  V-SMG-001 already creates orphans for every smuggled request. To
+  observe the desync, after smuggling, send any cache-busting GET
+  (e.g. GET /?_cb=poll) on a new TCP connection - the response body
+  delivered to that client is the smuggled response, not the response
+  for / .
+
+Mitigation:
+  - Fix V-SMG-001.
+  - Never reuse upstream connections after the gateway observes an
+    unmatched response.
+  - Tag every request/response pair with a server-side correlation
+    token and drop mismatched pairs.
+
+--------------------------------------------------------------------------------
+V-SMG-005  Internal-header disclosure via /api/echo reflection
+--------------------------------------------------------------------------------
+Vulnerability:
+  /api/echo (designed for "preview my share request" debugging)
+  reflects every inbound HTTP header in its JSON response. Because
+  Argus Edge adds X-Internal-Auth, X-Forwarded-For, X-Request-ID and
+  X-Forwarded-Proto on upstream traffic, any direct GET /api/echo
+  through the gateway returns the secret internal token in clear text.
+
+Impact:
+  - Discovery of the internal token NP-INTERNAL-2026, which enables
+    V-SMG-002 to bypass the back-end's defence-in-depth check on
+    /admin.
+  - General disclosure of the edge's internal trust headers, which
+    informs every other smuggling exploit.
+
+Exploit recipe:
+    GET /api/echo HTTP/1.1
+    Host: target
+    Connection: close
+
+  Look for "x-internal-auth": "NP-INTERNAL-2026" in the JSON response.
+
+Mitigation:
+  - Never echo internal headers. Drop x-internal-auth, x-real-ip,
+    x-forwarded-*, x-request-id, authorization, cookie from any
+    reflection endpoint.
+  - Stop trusting cleartext upstream headers; sign them.
+
+--------------------------------------------------------------------------------
+V-SMG-006  Cache poisoning of /article/:slug via smuggled response
+--------------------------------------------------------------------------------
+Vulnerability:
+  The gateway caches GET responses to /, /article/:slug, /category/:name
+  for 30 s under a cache key derived from the FE's view of the request.
+  When the gateway receives a response for which it has a waiter, it
+  writes the response to that waiter AND stores the response under the
+  waiter's cache key.
+
+  In V-SMG-001's response-queue desync, the gateway can serve a
+  smuggled response (e.g. an admin page, or an attacker-redirect) to
+  a legitimate client. If that legitimate client requested a cacheable
+  URL (e.g. /article/central-bank-pause), the smuggled response is
+  cached under that URL and served to every subsequent reader for the
+  remainder of the TTL.
+
+Impact:
+  - Mass-distribute attacker-controlled HTML/JS under a NovaPress URL.
+  - The cached response can carry attacker-chosen JS (e.g. via a
+    smuggled inner that hits a back-end route reflecting input).
+  - Flag: AccessibleBBB{smuggle-cache-poison-homepage} (returned when
+    the homepage cache holds an admin-flag response).
+
+Exploit recipe:
+  1) Smuggle a request whose back-end response is small and contains
+     the attack payload (e.g. GET /admin which returns the admin flag).
+  2) Race a legitimate request for the cacheable URL (GET / or
+     GET /article/<slug>) so the gateway's waiter for that URL is the
+     one that picks up the orphan smuggled response.
+  3) The smuggled response is now in cache under the cacheable URL.
+  4) Every subsequent reader of the cacheable URL receives the
+     attacker-injected response for the cache TTL.
+
+Mitigation:
+  - Never cache a response if the gateway noticed any anomaly on the
+    upstream socket (orphan, malformed framing).
+  - Bind cache keys to the response, not the request, when there is
+    any doubt about which request the response actually corresponds
+    to. In practice: fix V-SMG-001.
+
+--------------------------------------------------------------------------------
+Demo accounts
+--------------------------------------------------------------------------------
+  emma.kovac      / Pa55word!     subscriber
+  daniel.weiss    / Spring2024!   subscriber
+  priya.shankar   / NovaReader1!  subscriber
+  tomas.bernal    / tomas-22      reader
+  mei.tanaka      / mei4Tea       reader
+  jenna.osei      / Author2024!   author
+  rafael.dimaio   / Author#Raf    author
+  alice.lefebvre  / Editor2024!   editor
+  martin.gallagher/ EditorMG#1    editor
+  richard.hong    / Admin2024!    admin
+
+--------------------------------------------------------------------------------
+Notes for instructors
+--------------------------------------------------------------------------------
+- The 30 s cache TTL means re-running the smoke test back to back can
+  yield "stale" results on the first few requests. Use cache-busting
+  query strings (?cb=anything) for any "drain" request that must hit
+  the back-end.
+- PowerShell's Invoke-WebRequest will normalise away ambiguous
+  CL+TE-together requests. Use raw System.Net.Sockets.TcpClient (see
+  smoke-test.ps1) or `curl --http1.1 --raw` to send the exact bytes.
+- Burp Suite's "HTTP Request Smuggler" extension automates discovery.
+  Pointing it at http://127.0.0.1:3004 reports CL.TE with high
+  confidence within a handful of probes.

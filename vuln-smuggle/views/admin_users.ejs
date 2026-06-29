@@ -1,0 +1,27 @@
+<%- include('partials/header', { title: 'Users - Admin' }) %>
+<section class="admin">
+  <h1>Users</h1>
+  <p class="crumbs"><a href="/admin">Admin</a> / Users</p>
+  <table class="audit">
+    <thead><tr><th>ID</th><th>Username</th><th>Display</th><th>Email</th><th>Tier</th><th>Joined</th><th>Action</th></tr></thead>
+    <tbody>
+    <% users.forEach(function(u) { %>
+      <tr>
+        <td><%= u.id %></td><td><%= u.username %></td><td><%= u.display_name %></td>
+        <td><%= u.email %></td><td><%= u.tier %></td><td><%= u.created_at %></td>
+        <td>
+          <form method="post" action="/admin/users/<%= u.id %>/role" style="display:inline">
+            <select name="tier">
+              <% ['reader','subscriber','author','editor','admin'].forEach(function(t) { %>
+                <option<%= u.tier === t ? ' selected' : '' %>><%= t %></option>
+              <% }) %>
+            </select>
+            <button class="btn small">Set</button>
+          </form>
+        </td>
+      </tr>
+    <% }) %>
+    </tbody>
+  </table>
+</section>
+<%- include('partials/footer') %>

@@ -1,0 +1,20 @@
+{
+  "name": "vuln-smuggle",
+  "version": "0.1.0",
+  "private": true,
+  "description": "NovaPress - a deliberately-vulnerable online newsroom that ships a legacy reverse-proxy in front of a Node back-end, deliberately wired to demonstrate HTTP Request Smuggling.",
+  "scripts": {
+    "start": "node server.js",
+    "backend": "node backend.js",
+    "gateway": "node gateway.js",
+    "seed": "node seed.js"
+  },
+  "dependencies": {
+    "body-parser": "^1.20.2",
+    "cookie-parser": "^1.4.6",
+    "ejs": "^3.1.10",
+    "express": "^4.19.2",
+    "express-session": "^1.18.0",
+    "morgan": "^1.10.0"
+  }
+}

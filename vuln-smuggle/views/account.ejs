@@ -1,0 +1,13 @@
+<%- include('partials/header', { title: 'Account - NovaPress' }) %>
+<section class="form-pane">
+  <h1>Account</h1>
+  <dl class="kv">
+    <dt>Username</dt><dd><%= user.username %></dd>
+    <dt>Display name</dt><dd><%= user.display_name %></dd>
+    <dt>Email</dt><dd><%= user.email %></dd>
+    <dt>Tier</dt><dd><%= user.tier %></dd>
+    <dt>Member since</dt><dd><%= user.created_at %></dd>
+  </dl>
+  <p><a href="/logout">Sign out</a></p>
+</section>
+<%- include('partials/footer') %>

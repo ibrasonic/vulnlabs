@@ -1,0 +1,11 @@
+<%- include('partials/header', { title: 'Subscribers only - NovaPress' }) %>
+<section class="paywall-pane">
+  <h1>Subscribers only</h1>
+  <p class="deck"><%= a.title %></p>
+  <p>This article is reserved for subscribers. Sign in with a subscriber account, or upgrade your reader account.</p>
+  <p class="cta-row">
+    <a class="btn" href="/login?next=/article/<%= a.slug %>">Sign in</a>
+    <a class="btn primary" href="/register">Subscribe</a>
+  </p>
+</section>
+<%- include('partials/footer') %>

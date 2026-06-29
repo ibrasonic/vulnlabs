@@ -1,0 +1,31 @@
+<%- include('partials/header', { title: a.title + ' - NovaPress' }) %>
+<article class="story">
+  <div class="story-meta">
+    <a class="cat" href="/category/<%= a.category %>"><%= a.category %></a>
+    <% if (a.paywall) { %><span class="pw">Subscribers</span><% } %>
+    <time><%= (a.published_at || '').slice(0,16) %></time>
+  </div>
+  <h1><%= a.title %></h1>
+  <% if (a.deck) { %><p class="deck"><%= a.deck %></p><% } %>
+  <p class="byline">By <%= a.author_name %> (<%= a.author_handle %>)</p>
+  <div class="body"><%- a.body %></div>
+</article>
+
+<section id="comments" class="comments">
+  <h2><%= comments.length %> comment<%= comments.length === 1 ? '' : 's' %></h2>
+  <% comments.forEach(function(c) { %>
+    <div class="cmt">
+      <div class="who"><strong><%= c.author_label %></strong> <time><%= c.created_at %></time></div>
+      <p><%= c.body %></p>
+    </div>
+  <% }) %>
+  <% if (user) { %>
+    <form method="post" action="/article/<%= a.slug %>/comment" class="cmt-form">
+      <textarea name="body" rows="3" placeholder="Add a comment..." required></textarea>
+      <button type="submit">Post comment</button>
+    </form>
+  <% } else { %>
+    <p class="cmt-login"><a href="/login?next=/article/<%= a.slug %>">Sign in</a> to comment.</p>
+  <% } %>
+</section>
+<%- include('partials/footer') %>

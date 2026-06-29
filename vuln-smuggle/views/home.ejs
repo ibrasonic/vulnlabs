@@ -1,0 +1,21 @@
+<%- include('partials/header', { title: 'NovaPress' }) %>
+<section class="hero">
+  <h1>Today on NovaPress</h1>
+  <p class="lede">Independent reporting from staff in 14 bureaus, plus the work of the writers we trust.</p>
+</section>
+<section class="grid">
+  <% articles.forEach(function(a, i) { %>
+    <article class="card<%= i === 0 ? ' lead' : '' %><%= a.paywall ? ' paywall' : '' %>">
+      <div class="meta">
+        <a class="cat" href="/category/<%= a.category %>"><%= a.category %></a>
+        <% if (a.paywall) { %><span class="pw">Subscribers</span><% } %>
+        <time><%= (a.published_at || '').slice(0,16) %></time>
+      </div>
+      <h2><a href="/article/<%= a.slug %>"><%= a.title %></a></h2>
+      <% if (a.deck) { %><p class="deck"><%= a.deck %></p><% } %>
+      <p class="preview"><%= a.preview %></p>
+      <p class="byline">By <%= a.author_name %></p>
+    </article>
+  <% }) %>
+</section>
+<%- include('partials/footer') %>

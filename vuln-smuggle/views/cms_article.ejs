@@ -1,0 +1,18 @@
+<%- include('partials/header', { title: a.title + ' - CMS' }) %>
+<section class="cms cms-article">
+  <p class="crumbs"><a href="/cms">CMS</a> / <%= a.slug %></p>
+  <h1><%= a.title %></h1>
+  <p class="byline"><%= a.category %> &middot; status: <span class="badge b-<%= a.status %>"><%= a.status %></span> <% if (a.paywall) { %>&middot; <span class="pw">Subscribers</span><% } %></p>
+  <% if (a.deck) { %><p class="deck"><%= a.deck %></p><% } %>
+  <div class="body"><%- a.body %></div>
+  <hr>
+  <p class="actions">
+    <% if (a.status === 'draft' || a.status === 'scheduled') { %>
+      <form method="post" action="/cms/article/<%= a.id %>/publish" style="display:inline"><button class="btn">Publish</button></form>
+    <% } else if (a.status === 'published') { %>
+      <form method="post" action="/cms/article/<%= a.id %>/retract" style="display:inline"><button class="btn">Retract</button></form>
+    <% } %>
+    <a class="btn" href="/cms">Back</a>
+  </p>
+</section>
+<%- include('partials/footer') %>

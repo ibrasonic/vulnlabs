@@ -1,0 +1,8 @@
+<%- include('partials/header', { title: 'About - NovaPress' }) %>
+<section class="about">
+  <h1>About NovaPress</h1>
+  <p class="lede">A deliberately-vulnerable newsroom for the AccessibleBBB book. Real articles, real comments, real staff tools, real bugs.</p>
+  <p>The public site is served by a legacy reverse-proxy ("Argus Edge", port 3004) that fronts the NovaPress back-end (loopback 3094). The edge caches the homepage and article pages, strips inbound internal headers, blocks <code>/cms</code> and <code>/admin</code> on the public ingress, and pools upstream connections to the back-end.</p>
+  <p>The edge has bugs. The book teaches you what they are.</p>
+</section>
+<%- include('partials/footer') %>

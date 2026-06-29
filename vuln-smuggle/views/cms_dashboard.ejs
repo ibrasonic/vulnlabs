@@ -1,0 +1,32 @@
+<%- include('partials/header', { title: 'CMS - NovaPress' }) %>
+<section class="cms">
+  <h1>NovaPress CMS <small>tier: <%= tier %></small></h1>
+  <p class="lede">Staff dashboard. Drafts live here until an editor publishes them.</p>
+  <p><a class="btn primary" href="/cms/new">Start a new draft</a></p>
+  <table class="cms-tbl">
+    <thead><tr><th>Title</th><th>Status</th><th>Cat</th><th>Author</th><th>Updated</th><th>Actions</th></tr></thead>
+    <tbody>
+    <% articles.forEach(function(a) { %>
+      <tr class="row-<%= a.status %><%= a.paywall ? ' pw' : '' %>">
+        <td><a href="/cms/article/<%= a.id %>"><%= a.title %></a></td>
+        <td><span class="badge b-<%= a.status %>"><%= a.status %></span></td>
+        <td><%= a.category %></td>
+        <td><%= a.author_name %></td>
+        <td><%= (a.published_at || a.created_at || '').slice(0,16) %></td>
+        <td>
+          <% if (a.status === 'draft' || a.status === 'scheduled') { %>
+            <form method="post" action="/cms/article/<%= a.id %>/publish" style="display:inline">
+              <button class="btn small">Publish</button>
+            </form>
+          <% } else if (a.status === 'published') { %>
+            <form method="post" action="/cms/article/<%= a.id %>/retract" style="display:inline">
+              <button class="btn small">Retract</button>
+            </form>
+          <% } %>
+        </td>
+      </tr>
+    <% }) %>
+    </tbody>
+  </table>
+</section>
+<%- include('partials/footer') %>

@@ -1,0 +1,17 @@
+services:
+  novapress:
+    build: .
+    image: vuln-smuggle:latest
+    container_name: vuln-smuggle
+    environment:
+      - GW_HOST=0.0.0.0
+      - GW_PORT=3004
+      - BE_HOST=127.0.0.1
+      - BE_PORT=3094
+      - UP_HOST=127.0.0.1
+      - UP_PORT=3094
+      - GW_POOL=1
+      - INTERNAL_TOKEN=NP-INTERNAL-2026
+    ports:
+      - "3004:3004"
+    restart: unless-stopped

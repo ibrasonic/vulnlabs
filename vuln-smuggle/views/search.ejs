@@ -1,0 +1,19 @@
+<%- include('partials/header', { title: 'Search - NovaPress' }) %>
+<section class="search-pane">
+  <h1>Search</h1>
+  <form action="/search" method="get" class="search-form">
+    <input name="q" value="<%= q.replace(/"/g, '&quot;') %>" placeholder="Search NovaPress" autofocus>
+    <button>Search</button>
+  </form>
+  <% if (q) { %>
+    <p class="result-count"><%= hits.length %> result<%= hits.length === 1 ? '' : 's' %> for "<%= q %>".</p>
+  <% } %>
+  <% hits.forEach(function(a) { %>
+    <article class="hit">
+      <h2><a href="/article/<%= a.slug %>"><%= a.title %></a></h2>
+      <p class="byline"><%= a.category %> &middot; <%= a.author_name %> &middot; <%= (a.published_at || '').slice(0,10) %></p>
+      <p class="deck"><%= a.deck %></p>
+    </article>
+  <% }) %>
+</section>
+<%- include('partials/footer') %>

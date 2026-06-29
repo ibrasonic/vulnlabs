@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title><%= typeof title === 'string' ? title : 'NovaPress' %></title>
+  <link rel="stylesheet" href="/static/css/app.css">
+</head>
+<body>
+<header class="site-header">
+  <div class="bar">
+    <a class="brand" href="/">NovaPress</a>
+    <nav class="nav">
+      <a href="/category/politics">Politics</a>
+      <a href="/category/business">Business</a>
+      <a href="/category/tech">Tech</a>
+      <a href="/category/sport">Sport</a>
+      <a href="/category/culture">Culture</a>
+      <a href="/category/opinion">Opinion</a>
+    </nav>
+    <form class="search" action="/search" method="get">
+      <input name="q" placeholder="Search articles" value="<%= (typeof q === 'string' ? q : '').replace(/"/g,'&quot;') %>">
+    </form>
+    <div class="auth">
+      <% if (typeof user !== 'undefined' && user) { %>
+        <span class="who"><%= user.display %> <small>(<%= user.tier %>)</small></span>
+        <a href="/account">Account</a>
+        <% if (user.tier === 'author' || user.tier === 'editor' || user.tier === 'admin') { %>
+          <a href="/cms" class="staff">CMS</a>
+        <% } %>
+        <a href="/logout">Sign out</a>
+      <% } else { %>
+        <a href="/login">Sign in</a>
+        <a href="/register" class="cta">Subscribe</a>
+      <% } %>
+    </div>
+  </div>
+</header>
+<main class="site-main">

@@ -1,0 +1,22 @@
+<%- include('partials/header', { title: 'Admin - NovaPress' }) %>
+<section class="admin">
+  <h1>Admin</h1>
+  <p class="flag-line">Bypass flag: <code><%= FLAGS.ADMIN %></code></p>
+  <ul class="stats">
+    <li><strong><%= stats.users %></strong> users</li>
+    <li><strong><%= stats.articles %></strong> articles</li>
+    <li><strong><%= stats.drafts %></strong> drafts</li>
+    <li><strong><%= stats.comments %></strong> comments</li>
+  </ul>
+  <h2>Audit log</h2>
+  <table class="audit">
+    <thead><tr><th>At</th><th>Actor</th><th>Action</th><th>Detail</th></tr></thead>
+    <tbody>
+    <% audit.forEach(function(e) { %>
+      <tr><td><%= e.at %></td><td><%= e.actor %></td><td><%= e.action %></td><td><%= e.detail %></td></tr>
+    <% }) %>
+    </tbody>
+  </table>
+  <p><a class="btn" href="/admin/users">Users</a></p>
+</section>
+<%- include('partials/footer') %>

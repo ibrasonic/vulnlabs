@@ -1,0 +1,22 @@
+<%- include('partials/header', { title: name + ' - NovaPress' }) %>
+<section class="cat-head">
+  <h1><%= name.charAt(0).toUpperCase() + name.slice(1) %></h1>
+  <p class="lede"><%= articles.length %> article<%= articles.length === 1 ? '' : 's' %> in this section.</p>
+</section>
+<section class="grid">
+  <% articles.forEach(function(a) { %>
+    <article class="card<%= a.paywall ? ' paywall' : '' %>">
+      <div class="meta">
+        <a class="cat" href="/category/<%= a.category %>"><%= a.category %></a>
+        <% if (a.paywall) { %><span class="pw">Subscribers</span><% } %>
+        <time><%= (a.published_at || '').slice(0,16) %></time>
+      </div>
+      <h2><a href="/article/<%= a.slug %>"><%= a.title %></a></h2>
+      <% if (a.deck) { %><p class="deck"><%= a.deck %></p><% } %>
+      <p class="preview"><%= a.preview %></p>
+      <p class="byline">By <%= a.author_name %></p>
+    </article>
+  <% }) %>
+  <% if (!articles.length) { %><p class="empty">No published articles in this section.</p><% } %>
+</section>
+<%- include('partials/footer') %>
