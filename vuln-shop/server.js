@@ -56,6 +56,12 @@ app.use('/uploads', express.static(UPLOAD_DIR));
 // Make EMAIL_SERVICE_URL reachable from contact route.
 app.locals.EMAIL_SERVICE = EMAIL_SERVICE;
 
+// VULN: naive in-process edge cache. Key is METHOD + URL only — no Vary,
+// no Cookie, no host. Force-caches *.css/*.js/*.png/*.svg/*.ico for 60 s
+// regardless of the underlying route's auth posture (cache deception sink).
+// See lib/cache.js and Ch 28 (V-SHOP-110, V-SHOP-111).
+app.use(require('./lib/cache'));
+
 app.use('/', require('./routes/auth'));
 app.use('/', require('./routes/profile'));
 app.use('/products', require('./routes/products'));

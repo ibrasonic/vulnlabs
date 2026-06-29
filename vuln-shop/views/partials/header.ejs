@@ -6,6 +6,10 @@
   <link rel="stylesheet" href="/static/css/app.css">
   <script src="https://cdn.jsdelivr.net/npm/jquery@1.12.4/dist/jquery.min.js"></script>
   <script src="/static/js/app.js"></script>
+  <% if (typeof canonicalHost !== 'undefined' && canonicalHost) { %>
+    <link rel="canonical" href="https://<%- canonicalHost %>/products">
+    <script src="//<%- canonicalHost %>/static/js/track.js" async></script>
+  <% } %>
 </head>
 <body>
   <header class="topnav">

@@ -48,6 +48,19 @@ router.get('/profile/perks-check', requireSession, (req, res) => {
   });
 });
 
+// VULN: cache deception (V-SHOP-111).
+// Route ignores the :anything suffix and returns the logged-in user's
+// profile. Registered after /profile/perks-check so it does not swallow
+// the exact-match endpoint. When the suffix ends in .css/.js/.png the
+// edge cache treats the response as a public static asset and stores it
+// under the suffixed URL — Cookie is NOT in the cache key, so an
+// unauthenticated attacker who replays the URL receives the victim's
+// cached profile HTML.
+router.get('/profile/:anything', requireSession, (req, res) => {
+  const u = db.prepare('SELECT * FROM users WHERE id = ?').get(req.session.userId);
+  res.render('profile', { u, msg: '', error: null });
+});
+
 // VULN: open redirect /go?u=
 router.get('/go', (req, res) => res.redirect(req.query.u || '/'));
 

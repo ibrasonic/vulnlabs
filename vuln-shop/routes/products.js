@@ -12,6 +12,15 @@ router.get('/', (req, res) => {
   } else {
     prods = db.prepare('SELECT * FROM products ORDER BY id').all();
   }
+  // VULN: cache poisoning (V-SHOP-110).
+  // X-Forwarded-Host is unkeyed by the edge cache but reaches the rendered
+  // page body via res.locals.canonicalHost, which the layout uses to build
+  // the analytics script-src. An attacker who sends the request first wins
+  // the cache slot for every subsequent visitor for the TTL.
+  const host = req.headers['x-forwarded-host'] || req.headers['host'];
+  res.locals.canonicalHost = host;
+  res.setHeader('Cache-Control', 'public, max-age=30');
+  res.setHeader('X-Canonical-Host', host);
   res.render('products', { prods, q: req.query.q || '', cat: cat || '' });
 });
 
