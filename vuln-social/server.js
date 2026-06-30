@@ -19,7 +19,12 @@ app.set('views', path.join(__dirname, 'views'));
 app.use(morgan('dev'));
 app.use(cookieParser());
 app.use(bodyParser.urlencoded({ extended: true, limit: '10mb' }));
-app.use(bodyParser.json({ limit: '10mb' }));
+app.use((req, res, next) => {
+  // Skip JSON body parsing for /webhook so routes/integrity.js can
+  // verify the HMAC over the raw request bytes.
+  if (req.path.startsWith('/webhook')) return next();
+  return bodyParser.json({ limit: '10mb' })(req, res, next);
+});
 
 // VULN: cookie missing security flags, no SameSite -> CSRF-friendly.
 app.use(session({
@@ -59,6 +64,7 @@ app.use('/admin', require('./routes/admin'));
 app.use('/api', require('./routes/api'));
 app.use('/ai-summary', require('./routes/ai'));
 app.use('/components', require('./routes/components'));
+app.use('/webhook', require('./routes/integrity'));
 
 // VULN: debug endpoint
 app.get('/debug', (req, res) => {

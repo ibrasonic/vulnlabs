@@ -82,6 +82,7 @@ app.use('/',         require('./routes/profile'));
 app.use('/accounts', require('./routes/accounts'));
 app.use('/transfer', require('./routes/transfers'));
 app.use('/statements', require('./routes/statements'));
+app.use('/admin/integrity', require('./routes/integrity'));
 app.use('/admin',    require('./routes/admin'));
 app.use('/support',  require('./routes/support'));
 app.use('/api',      require('./routes/api'));

