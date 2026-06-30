@@ -56,3 +56,30 @@ window.__NOVA_TRUST__ = {
   internalKey: 'sk_live_NOVATRUST_DEBUG_4242424242424242',
   release: '2026.06.05-debug'
 };
+
+// VULN (B-COMP-001): vulnerable component -- jQuery 1.12.4 is loaded by
+// the layout (see views/_layout.ejs). Below we pass user-controlled
+// data to the `$()` selector function. In jQuery < 1.9, and again in
+// jQuery 1.x via the legacy htmlPrefilter path, any string that begins
+// with `<` is parsed as HTML. The new <img> is then injected and its
+// onerror fires.
+//
+// Trigger:  /accounts?theme=<img src=x onerror=alert(1)>
+(function () {
+  if (typeof window.jQuery !== 'function') return;
+  var $ = window.jQuery;
+  function applyTheme() {
+    var theme = new URLSearchParams(location.search).get('theme');
+    if (!theme) return;
+    var $slot = $('#theme-slot');
+    if (!$slot.length) {
+      $slot = $('<div id="theme-slot" class="hint"></div>');
+      $('main.container').prepend($slot);
+    }
+    // VULN: `$(theme)` parses leading `<` as HTML and creates real DOM
+    // nodes; appending the resulting <img>/<svg>/etc fires onerror.
+    var $node = $(theme);
+    $slot.empty().append($node);
+  }
+  $(applyTheme);
+})();

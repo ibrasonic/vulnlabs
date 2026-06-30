@@ -84,6 +84,7 @@ Hidden secret in JS bundle: sk_live_NOVATRUST_DEBUG_4242424242424242
  [58]  Security misconfig — support-token bypass header (Ch 33)
  [59]  Security misconfig — CORS reflected origin + credentials on /api (Ch 33)
  [60]  Security misconfig — /uploads/ directory listing enabled (Ch 33)
+ [61]  Vulnerable component — jQuery 1.12.4 `$()` HTML parsing → DOM XSS via ?theme= (Ch 34)
 
 
 --------------------------------------------------------------------------------
@@ -958,6 +959,35 @@ MITIGATION
   Disable autoindex on every static mount (Express does not enable it; this
   lab opted in intentionally). For nginx, ensure `autoindex off;`. Store user
   uploads behind a permission-checked download route, not directly served.
+
+
+--------------------------------------------------------------------------------
+ [61] Vulnerable component — jQuery 1.12.4 `$()` HTML parsing
+--------------------------------------------------------------------------------
+SINK   public/js/app.js  applyTheme() IIFE
+CHAPTER 34
+
+The bank loads public/vendor/jquery-1.12.4.min.js in
+views/partials/header.ejs. app.js reads ?theme= from
+window.location.search and passes it to `$()`. Any string
+starting with `<` is parsed as HTML and turned into real DOM
+nodes -- including <img onerror=...>, which fires in the
+browser when the src 404s.
+
+EXPLOIT
+  Browse (in a real browser, not curl):
+    http://localhost:3001/accounts?theme=<img src=x onerror=alert(1)>
+  Or unauthenticated on /register:
+    http://localhost:3001/register?theme=<img src=x onerror=alert(1)>
+
+VERIFY without a browser (jsdom):
+  See book/chapters/34-vulnerable-and-outdated-components.md Section 5.1.
+
+MITIGATION
+  - Upgrade jQuery to >= 3.5.0 (CVE-2020-11022, CVE-2020-11023 patched).
+  - Never pass user input to `$()`. If you need to set HTML, use `.text()`
+    or wrap with `DOMPurify.sanitize(...)`.
+  - CSP: `script-src 'self'` blocks the inline `onerror=` payload.
 
 
 ================================================================================

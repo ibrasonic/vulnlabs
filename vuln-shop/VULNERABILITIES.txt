@@ -120,6 +120,27 @@ V-SHOP-018  Stored XSS via review markdown -- `[text](javascript:...)` + raw HTM
   Mitigation: use a real markdown library with HTML sanitisation enabled;
               reject URLs whose scheme is not in {http, https, mailto}.
 
+V-SHOP-019  Vulnerable component -- marked@0.3.6 raw-HTML pass-through (CH 34)
+  Location:  routes/components.js  GET/POST /components/preview-description
+             package.json:  "marked": "^0.3.6"
+  Exploit:   curl 'http://127.0.0.1:3002/components/preview-description?md=%3Cimg%20src%3Dx%20onerror%3Dalert(1)%3E'
+             curl -X POST http://127.0.0.1:3002/components/preview-description \
+               -H 'Content-Type: application/json' \
+               -d '{"markdown":"[click](javascript:alert`1`)"}'
+             # marked@0.3.6 passes raw HTML through by default. Even with
+             # { sanitize: true } it has multiple known bypasses fixed only
+             # in 0.7.0 (CVE-2018-1000156-style autolink, javascript: URIs).
+  Mitigation: upgrade to marked@>=4.0.0; pair with DOMPurify on the output.
+              Reject URLs whose scheme is not http/https/mailto.
+              Run `npm audit` and let CI fail on Moderate+.
+
+V-SHOP-019a Library version disclosure
+  Location:  routes/components.js  GET /components/version
+  Exploit:   curl http://127.0.0.1:3002/components/version
+             # Returns the dependency list (including marked@0.3.6).
+  Mitigation: do not ship a public version endpoint; if needed for
+              monitoring, restrict to internal IPs.
+
 
 -----------------------------------------------------------------
 AUTHENTICATION & SESSION

@@ -58,6 +58,7 @@ app.use('/dm', require('./routes/dm'));
 app.use('/admin', require('./routes/admin'));
 app.use('/api', require('./routes/api'));
 app.use('/ai-summary', require('./routes/ai'));
+app.use('/components', require('./routes/components'));
 
 // VULN: debug endpoint
 app.get('/debug', (req, res) => {
