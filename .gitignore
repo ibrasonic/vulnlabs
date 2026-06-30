@@ -48,6 +48,9 @@ smoke-out.txt
 smoke-test.log
 .docker-*.log
 *.log
+*.log.err
+*.log[0-9]*
+*.log[0-9]*.err
 
 # --- OS / IDE noise --------------------------------------------------------
 .DS_Store

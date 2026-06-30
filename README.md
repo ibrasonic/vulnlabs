@@ -23,11 +23,11 @@ setup.
 
 ## What's in the box
 
-| Lab           | Theme                        | App port | Side service | Stack                                                                  |
-| ------------- | ---------------------------- | -------- | ------------ | ---------------------------------------------------------------------- |
-| `vuln-bank`   | Online banking + admin       | 3001     | —            | Node 24 + Express + EJS + `node:sqlite`                                |
-| `vuln-shop`   | E-commerce + admin + GraphQL | 3002     | 5002 (Flask) | Node 24 + Express + EJS + GraphQL + `node:sqlite` &nbsp;·&nbsp; Python 3 + Flask (Jinja2 SSTI sink) |
-| `vuln-social` | Social network + DMs + LLM   | 3003     | —            | Node 24 + Express + EJS + Socket.IO + `node:sqlite` &nbsp;·&nbsp; Google Gemini |
+| Lab           | Theme                        | App port | Side service             | Stack                                                                  |
+| ------------- | ---------------------------- | -------- | ------------------------ | ---------------------------------------------------------------------- |
+| `vuln-bank`   | Online banking + admin       | 3001     | MySQL 8 (`mysql:3306`)   | Node 24 + Express + EJS + MySQL 8 (`mysql2` + `deasync`)               |
+| `vuln-shop`   | E-commerce + admin + GraphQL | 3002     | 5002 (Flask)             | Node 24 + Express + EJS + GraphQL + `node:sqlite` &nbsp;·&nbsp; Python 3 + Flask (Jinja2 SSTI sink) |
+| `vuln-social` | Social network + DMs + LLM   | 3003     | —                        | Node 24 + Express + EJS + Socket.IO + `node:sqlite` &nbsp;·&nbsp; Google Gemini |
 
 Every app ships:
 
@@ -81,14 +81,13 @@ app's `VULNERABILITIES.txt`.
 
 | Need                | Version                                              |
 | ------------------- | ---------------------------------------------------- |
-| Node.js             | **24 LTS or newer** (required for `node:sqlite`)     |
+| Node.js             | **24 LTS or newer** (`vuln-shop` and `vuln-social` need `node:sqlite`; `vuln-bank` needs `deasync` native bindings) |
+| Docker Desktop      | **Required for `vuln-bank`** (bundled MySQL 8 sidecar); optional for the other two |
 | PowerShell          | 5.1+ (Windows) — used by `run.ps1` and `smoke-test.ps1` |
-| Docker Desktop      | Optional — for the `docker compose` path             |
 | Python 3.11+        | Optional — only if you run `vuln-shop`'s email service outside Docker |
 | `GEMINI_API_KEY`    | Optional — only `vuln-social` uses it; falls back to a stub |
 
 `run.ps1` will offer to install Node via `winget` if it can't find it.
-
 ## Quick start — PowerShell, three terminals
 
 ```powershell
@@ -108,10 +107,9 @@ cd vuln-social
 Each `run.ps1`:
 
 1. checks Node.js (offers `winget install` if missing),
-2. runs `npm install` if `node_modules/` is absent,
-3. seeds the SQLite database on first run (idempotent on later runs),
-4. starts the Express server on the port shown above,
-5. prints every relevant URL and the seeded credentials.
+2. for `vuln-bank`, brings up the MySQL 8 sidecar + bank container via `docker compose up -d --build` and tails the bank logs (no separate `npm install` step — the image owns its deps),
+3. for `vuln-shop` and `vuln-social`, runs `npm install` if `node_modules/` is absent, seeds the SQLite database on first run (idempotent on later runs), then starts the Express server on the port shown above,
+4. prints every relevant URL and the seeded credentials.
 
 `vuln-social` additionally reads `GEMINI_API_KEY` (optional
 `GEMINI_MODEL`, default `gemini-2.0-flash`). With no key, `/ai-summary`
@@ -121,7 +119,8 @@ enough to demonstrate prompt injection end-to-end without leaving the box.
 ## Quick start — Docker Compose
 
 Each app ships its own compose file (independent services, independent
-named volumes for SQLite WAL safety on Windows).
+named volumes for storage durability — SQLite WAL safety on Windows for
+`vuln-shop`/`vuln-social`; MySQL data directory for `vuln-bank`).
 
 ```powershell
 cd vuln-bank   ; docker compose up --build -d
@@ -177,8 +176,8 @@ Expected results on a clean checkout:
 | App           | Checks  |
 | ------------- | ------- |
 | `vuln-bank`   | 40 / 40 |
-| `vuln-shop`   | 35 / 35 |
-| `vuln-social` | 37 / 37 |
+| `vuln-shop`   | 48 / 48 |
+| `vuln-social` | 43 / 43 |
 
 A non-zero failure means a route changed and a sink accidentally got
 fixed — open the failing check, then either restore the vulnerability
@@ -200,7 +199,7 @@ fixed — open the failing check, then either restore the vulnerability
 ├── routes/                # express route modules
 ├── views/                 # EJS templates
 ├── public/                # static frontend + per-item images
-└── data/                  # SQLite file + uploads (gitignored)
+└── data/                  # SQLite file or MySQL volume + uploads (gitignored)
 ```
 
 `vuln-shop` additionally has `email-service/` (Python 3 + Flask) which
@@ -234,14 +233,15 @@ bottom.
 
 ## Reset a lab to a fresh seed
 
-Each app reseeds when its database file is absent.
+`vuln-shop` and `vuln-social` reseed when their SQLite file is absent;
+`vuln-bank` reseeds when the MySQL volume is removed.
 
 PowerShell (host run):
 
 ```powershell
-Remove-Item .\vuln-bank\data\bank.db*     -Force -ErrorAction SilentlyContinue
 Remove-Item .\vuln-shop\data\shop.db*     -Force -ErrorAction SilentlyContinue
 Remove-Item .\vuln-social\data\social.db* -Force -ErrorAction SilentlyContinue
+cd vuln-bank ; docker compose down -v ; docker compose up --build -d
 ```
 
 Docker (named volume — same effect):
