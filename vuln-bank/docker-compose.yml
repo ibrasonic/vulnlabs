@@ -1,13 +1,68 @@
+# vuln-bank — one-command lab stack.
+#
+# Bring everything up with:
+#     docker compose up -d
+#
+# This starts MySQL 8.0 with the lab schema/seed AND the Express app.  Nothing
+# else needs to be installed locally.  Once the bank container reports
+# "listening on http://0.0.0.0:3001" the lab is ready at http://localhost:3001/.
+#
+# Reset the lab to factory state:
+#     docker compose down -v && docker compose up -d
+#
+# (The -v removes the named MySQL volume so the next start re-seeds.)
+
 services:
+  mysql:
+    image: mysql:8.0
+    container_name: vuln-bank-mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: rootpw
+      MYSQL_DATABASE:      vulnbank
+      MYSQL_USER:          bank
+      MYSQL_PASSWORD:      bankpw
+    # secure-file-priv empty so SELECT ... INTO OUTFILE and LOAD_FILE work
+    # against attacker-chosen paths (Ch 11 out-of-band SQLi).  Combined with
+    # the FILE grant in 01-grants.sql this gives the bank account the same
+    # privilege escalation surface that real prod misconfigurations create.
+    # local-infile=1 keeps the LOAD DATA INFILE primitive available too.
+    command: >
+      --secure-file-priv=
+      --local-infile=1
+      --default-authentication-plugin=caching_sha2_password
+    ports:
+      - "3306:3306"
+    volumes:
+      - bank-mysql-data:/var/lib/mysql
+      - ./mysql-init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-uroot", "-prootpw"]
+      interval: 5s
+      timeout:  5s
+      retries:  40
+      start_period: 30s
+
   bank:
     build: .
-    ports: ["3001:3001"]
+    container_name: vuln-bank
+    restart: unless-stopped
+    depends_on:
+      mysql:
+        condition: service_healthy
     environment:
-      PORT: "3001"
-      HOST: "0.0.0.0"
+      PORT:           "3001"
+      HOST:           "0.0.0.0"
+      MYSQL_HOST:     "mysql"
+      MYSQL_PORT:     "3306"
+      MYSQL_USER:     "bank"
+      MYSQL_PASSWORD: "bankpw"
+      MYSQL_DATABASE: "vulnbank"
+    ports:
+      - "3001:3001"
     volumes:
-      # Named volume — SQLite WAL mode is unreliable on Windows DrvFs bind mounts.
-      - bank-data:/app/data
+      - bank-uploads:/app/data
 
 volumes:
-  bank-data:
+  bank-mysql-data:
+  bank-uploads:

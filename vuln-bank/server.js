@@ -85,6 +85,7 @@ app.use('/statements', require('./routes/statements'));
 app.use('/admin/integrity', require('./routes/integrity'));
 app.use('/admin',    require('./routes/admin'));
 app.use('/support',  require('./routes/support'));
+app.use('/sqli',     require('./routes/sqli'));
 app.use('/api',      require('./routes/api'));
 app.use('/',         require('./routes/oauth'));
 

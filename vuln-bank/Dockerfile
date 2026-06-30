@@ -1,10 +1,20 @@
-# Node 24 LTS — required for the built-in `node:sqlite` module (DatabaseSync).
+# Node 24 LTS.  Drives the MySQL-backed bank app via mysql2 + deasync.
 FROM node:24-bookworm-slim
+
+# mysql client tools are not required at runtime (we talk over TCP via mysql2),
+# but a tiny CA bundle update keeps TLS happy if anyone enables it later.
 WORKDIR /app
+
 COPY package.json ./
-RUN npm install --no-fund --no-audit
+RUN npm install --no-fund --no-audit --omit=dev
+
 COPY . .
-RUN mkdir -p /app/data
+RUN mkdir -p /app/data && chmod -R 755 /app/data
+
 ENV PORT=3001 HOST=0.0.0.0
 EXPOSE 3001
+
+# Seed runs once before the app boots; if the users table already has rows the
+# server skips it (see server.js bottom).  This makes `docker compose up -d`
+# fully idempotent.
 CMD ["node", "server.js"]

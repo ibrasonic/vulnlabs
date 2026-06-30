@@ -1,95 +1,127 @@
-// lib/db.js — SQLite wrapper. Intentionally exposes a raw `db.exec` so route
-// handlers can concatenate user input directly into SQL strings (SQLi).
-// Uses Node's built-in node:sqlite (stable in Node 22.5+) so the lab needs no
-// native compile toolchain.
-const { DatabaseSync } = require('node:sqlite');
-const path = require('path');
-const fs = require('fs');
+// lib/db.js — MySQL adapter.
+//
+// The lab keeps a synchronous-looking API (`db.prepare(sql).get/all/run`,
+// `db.exec(sql)`) so the existing 70+ call sites do not change.  Internally
+// every call drives mysql2 via deasync so the Express handlers stay
+// synchronous, exactly the way better-sqlite3 / node:sqlite handlers do.
+//
+// VULNS deliberately baked in here so Chapter 11 has the full SQLi surface:
+//   - multipleStatements: true  → every template-literal sink is ALSO a
+//     stacked-query sink (DROP/INSERT/UPDATE chained onto a SELECT).
+//   - The bank app is granted FILE privilege at seed time
+//     (see seed.js + docker-compose.yml's --secure-file-priv flag), so
+//     LOAD_FILE and SELECT … INTO OUTFILE work for out-of-band SQLi demos.
+//
+// Connection bootstrap retries for up to 120s so `docker compose up -d`
+// (which starts the bank container before MySQL finishes initialising) works
+// from a single command with no user intervention.
 
-const DATA_DIR = path.join(__dirname, '..', 'data');
-if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
-const DB_PATH = path.join(DATA_DIR, 'bank.db');
+const mysql = require('mysql2');
+const deasync = require('deasync');
 
-const db = new DatabaseSync(DB_PATH);
-db.exec('PRAGMA journal_mode = WAL;');
-db.exec('PRAGMA foreign_keys = ON;');
-// Shim for better-sqlite3-style `db.pragma()` calls.
-db.pragma = (s) => db.exec('PRAGMA ' + s + ';');
+const config = {
+  host:     process.env.MYSQL_HOST     || '127.0.0.1',
+  port:     parseInt(process.env.MYSQL_PORT || '3306', 10),
+  user:     process.env.MYSQL_USER     || 'bank',
+  password: process.env.MYSQL_PASSWORD || 'bankpw',
+  database: process.env.MYSQL_DATABASE || 'vulnbank',
+  multipleStatements: true,
+  dateStrings: true,
+  charset: 'utf8mb4',
+};
 
-function init() {
-  db.exec(`
-    CREATE TABLE IF NOT EXISTS users (
-      id INTEGER PRIMARY KEY,
-      username TEXT UNIQUE NOT NULL,
-      password_md5 TEXT NOT NULL,            -- VULN: MD5 unsalted (A02)
-      email TEXT NOT NULL,
-      full_name TEXT NOT NULL,
-      phone TEXT,
-      address TEXT,
-      ssn TEXT,
-      dob TEXT,
-      role TEXT NOT NULL DEFAULT 'customer', -- 'customer' | 'admin'
-      mfa_enabled INTEGER DEFAULT 0,
-      otp_attempts INTEGER DEFAULT 0,         -- VULN: not actually enforced (A07)
-      reset_token TEXT,                       -- VULN: 6-digit numeric (A04)
-      reset_expires INTEGER,
-      profile_json TEXT DEFAULT '{}',         -- VULN: lodash.merge sink (A08)
-      avatar_url TEXT
-    );
+let connection = null;
 
-    CREATE TABLE IF NOT EXISTS accounts (
-      id INTEGER PRIMARY KEY,
-      user_id INTEGER NOT NULL REFERENCES users(id),
-      account_number TEXT UNIQUE NOT NULL,
-      account_type TEXT NOT NULL,            -- 'checking' | 'savings'
-      balance_cents INTEGER NOT NULL DEFAULT 0,
-      currency TEXT NOT NULL DEFAULT 'USD',
-      created_at TEXT NOT NULL DEFAULT (datetime('now'))
-    );
-
-    CREATE TABLE IF NOT EXISTS transfers (
-      id INTEGER PRIMARY KEY,
-      from_account TEXT NOT NULL,
-      to_account TEXT NOT NULL,
-      amount_cents INTEGER NOT NULL,
-      memo TEXT,
-      created_at TEXT NOT NULL DEFAULT (datetime('now'))
-    );
-
-    CREATE TABLE IF NOT EXISTS statements (
-      id INTEGER PRIMARY KEY,
-      account_id INTEGER NOT NULL REFERENCES accounts(id),
-      filename TEXT NOT NULL,                -- VULN: served via path-traversal (A01/A05)
-      uploaded_by INTEGER REFERENCES users(id),
-      created_at TEXT NOT NULL DEFAULT (datetime('now'))
-    );
-
-    CREATE TABLE IF NOT EXISTS support_messages (
-      id INTEGER PRIMARY KEY,
-      user_id INTEGER REFERENCES users(id),
-      subject TEXT NOT NULL,                 -- VULN: rendered unescaped (stored XSS)
-      body TEXT NOT NULL,
-      created_at TEXT NOT NULL DEFAULT (datetime('now'))
-    );
-
-    CREATE TABLE IF NOT EXISTS audit_log (
-      id INTEGER PRIMARY KEY,
-      user_id INTEGER,
-      action TEXT NOT NULL,
-      details TEXT,
-      created_at TEXT NOT NULL DEFAULT (datetime('now'))
-    );
-
-    CREATE TABLE IF NOT EXISTS webhooks (
-      id INTEGER PRIMARY KEY,
-      user_id INTEGER NOT NULL REFERENCES users(id),
-      url TEXT NOT NULL,                     -- VULN: SSRF (A10)
-      event TEXT NOT NULL,
-      created_at TEXT NOT NULL DEFAULT (datetime('now'))
-    );
-  `);
+function connectSync() {
+  const deadline = Date.now() + 120000;
+  let lastErr = null;
+  while (Date.now() < deadline) {
+    let done = false, ok = null;
+    const c = mysql.createConnection(config);
+    c.connect((err) => {
+      if (err) { lastErr = err; try { c.destroy(); } catch (_) {} done = true; }
+      else     { ok = c; done = true; }
+    });
+    deasync.loopWhile(() => !done);
+    if (ok) {
+      connection = ok;
+      connection.on('error', (err) => {
+        console.error('[db] mysql connection error:', err.code || err.message);
+        if (err.fatal || err.code === 'PROTOCOL_CONNECTION_LOST') {
+          connection = null;
+        }
+      });
+      return;
+    }
+    let wait = false;
+    setTimeout(() => { wait = true; }, 1000);
+    deasync.loopWhile(() => !wait);
+  }
+  throw new Error('[db] could not connect to MySQL after 120s: ' + (lastErr && lastErr.message));
 }
 
-init();
+connectSync();
+
+function reconnectIfNeeded() {
+  if (!connection) connectSync();
+}
+
+function runSync(sql, params) {
+  reconnectIfNeeded();
+  let done = false, error = null, result = null;
+  connection.query(sql, params || [], (err, res) => {
+    error = err; result = res; done = true;
+  });
+  deasync.loopWhile(() => !done);
+  if (error) throw error;
+  return result;
+}
+
+// With multipleStatements on, mysql2 returns either a single rows array, a
+// single OkPacket, or an array of those (one element per statement).  Collapse
+// multi-statement responses down to the FIRST sub-result so the legitimate
+// query's row shape stays compatible with SQLite-era render code; the stacked
+// side-effect still runs.
+function isResultArray(x) {
+  return Array.isArray(x) && x.length > 0 &&
+    (Array.isArray(x[0]) || (x[0] && x[0].constructor && x[0].constructor.name === 'OkPacket'));
+}
+
+function pickFirstRowset(res) {
+  if (res == null) return [];
+  if (isResultArray(res)) return pickFirstRowset(res[0]);
+  return Array.isArray(res) ? res : [];
+}
+
+function pickFirstResult(res) {
+  if (res == null) return null;
+  if (isResultArray(res)) return pickFirstResult(res[0]);
+  return res;
+}
+
+const db = {
+  exec(sql) { runSync(sql); },
+
+  prepare(sql) {
+    return {
+      all(...args) {
+        return pickFirstRowset(runSync(sql, args));
+      },
+      get(...args) {
+        return pickFirstRowset(runSync(sql, args))[0];
+      },
+      run(...args) {
+        const first = pickFirstResult(runSync(sql, args));
+        return {
+          lastInsertRowid: first && first.insertId    !== undefined ? first.insertId    : 0,
+          changes:         first && first.affectedRows !== undefined ? first.affectedRows : 0,
+        };
+      },
+    };
+  },
+
+  // SQLite-parity no-op.  Some routes still call db.pragma('foreign_keys=on').
+  pragma() {},
+};
 
 module.exports = db;
