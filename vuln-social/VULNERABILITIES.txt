@@ -323,6 +323,35 @@ V-SOC-028  DM access (read/write) is not logged at all
 
 
 -----------------------------------------------------------------
+CLIENT-SIDE / MODERN FRONTEND  (Ch 37)
+-----------------------------------------------------------------
+
+V-SOC-029  DOM clobbering -> open redirect via stored anchor
+  Location:  views/partials/footer.ejs (inline script reads
+             window.PROMO_LINK and uses String() of it as a URL)
+             plus routes/posts.js (post body rendered with `<%- %>`
+             so HTML survives unescaped).
+  Exploit:
+     # 1) Post the clobbering payload
+     curl -b cookies.txt -X POST http://localhost:3003/p \
+       --data-urlencode 'body=<a id="PROMO_LINK" href="https://evil.example/pwn">x</a>'
+     # 2) Verify in any browser (or jsdom):
+     #    window.PROMO_LINK   -> the <a> element
+     #    String(window.PROMO_LINK) -> 'https://evil.example/pwn'
+     #    clicking the footer "About" link now navigates to evil.example
+  Mitigation:
+     - Sanitise stored HTML.  Strip `id`/`name` attributes from
+       user content (or use a strict allow-list sanitiser such as
+       DOMPurify with `ALLOW_DATA_ATTR:false, FORBID_ATTR:['id','name']`).
+     - Read config from a dedicated namespace object that the script
+       defines locally (`var CFG = (window.__PULSE_CFG__ = {});`)
+       BEFORE any user content is parsed, and never from globals
+       that an attacker could clobber.
+     - Add CSP `script-src` to block external navigation if the
+       redirect target is off-origin.
+
+
+-----------------------------------------------------------------
 ACCESS CONTROL
 -----------------------------------------------------------------
 

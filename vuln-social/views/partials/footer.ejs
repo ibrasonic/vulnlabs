@@ -1,6 +1,22 @@
 </main>
 <footer class="footer">
-  &copy; Pulse &middot; <a href="#">About</a> &middot; <a href="#">Privacy</a> &middot; <a href="#">Terms</a>
+  &copy; Pulse &middot; <a href="#" id="promo-link">About</a> &middot; <a href="#">Privacy</a> &middot; <a href="#">Terms</a>
 </footer>
+<script>
+  // VULN (S-DOM-CLOB-001 / Ch 37): "promo bar" looks up a runtime
+  // config variable on the window object and uses it as a URL.  If
+  // any stored HTML on the page introduces a top-level element with
+  // id="PROMO_LINK", that element shadows the JS global and clicking
+  // the footer link navigates to whatever URL the attacker chose.
+  (function () {
+    var url = window.PROMO_LINK;
+    var a = document.getElementById('promo-link');
+    if (!url || !a) return;
+    a.addEventListener('click', function (e) {
+      e.preventDefault();
+      location.href = String(url);
+    });
+  })();
+</script>
 </body>
 </html>

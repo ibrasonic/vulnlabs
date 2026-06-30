@@ -1,4 +1,29 @@
   </main>
   <footer><small>&copy; Northwind Outfitters. Free returns within 60 days.</small></footer>
+  <script>
+    // VULN (S-PM-001 / Ch 37): the storefront listens for postMessage
+    // events from a presumed payment-provider iframe and trusts them
+    // without checking event.origin.  Any page that frames the shop
+    // can invoke add_to_cart or navigate the victim away.
+    window.addEventListener('message', function (e) {
+      var d;
+      try { d = typeof e.data === 'string' ? JSON.parse(e.data) : e.data; }
+      catch (_) { return; }
+      if (!d || typeof d !== 'object') return;
+      if (d.action === 'add_to_cart') {
+        var body = 'product_id=' + encodeURIComponent(d.product_id) +
+                   '&qty='        + encodeURIComponent(d.qty) +
+                   '&price_cents='+ encodeURIComponent(d.price_cents || 1);
+        fetch('/cart/add', {
+          method: 'POST',
+          credentials: 'include',
+          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+          body: body
+        });
+      } else if (d.action === 'navigate') {
+        location.href = String(d.url);
+      }
+    });
+  </script>
 </body>
 </html>

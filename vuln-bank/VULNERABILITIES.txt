@@ -87,6 +87,7 @@ Hidden secret in JS bundle: sk_live_NOVATRUST_DEBUG_4242424242424242
  [61]  Vulnerable component — jQuery 1.12.4 `$()` HTML parsing → DOM XSS via ?theme= (Ch 34)
  [62]  Software & Data Integrity — POST /admin/integrity/install accepts unsigned plugin code → RCE (Ch 35)
  [63]  Logging & Monitoring — failed logins and SSN-view actions are not audited; /admin/audit reachable by any logged-in user; CRLF log forgery via /forgot email (Ch 36)
+ [64]  Client-side / modern frontend — no CSP, no SRI on jQuery/Bootstrap CDNs, postMessage/origin checks missing in cross-frame admin tooling (Ch 37)
 
 
 --------------------------------------------------------------------------------
