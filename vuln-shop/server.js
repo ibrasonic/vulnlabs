@@ -23,6 +23,9 @@ app.use(bodyParser.urlencoded({ extended: true, limit: '10mb' }));
 app.use(bodyParser.json({ limit: '10mb' }));
 app.use(bodyParser.text({ type: ['application/xml', 'text/xml'], limit: '10mb' }));
 
+// VULN (S-LOG-001..003): write every request body to data/access.log.
+app.use(require('./lib/access-log').middleware);
+
 // VULN: session cookie missing flags (HttpOnly off, no SameSite).
 app.use(session({
   name: 'sid',

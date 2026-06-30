@@ -78,4 +78,16 @@ router.post('/upload', upload.single('file'), (req, res) => {
   res.json({ ok: true, url: '/uploads/' + req.file.filename });
 });
 
+// VULN (S-LOG-004): /admin/logs reads the access log.  The role check
+// is missing -- any logged-in customer can pull every other customer's
+// login passwords and checkout card numbers out of it.
+const { LOG_FILE } = require('../lib/access-log');
+router.get('/logs', (req, res) => {
+  const tail = parseInt(req.query.tail || '200', 10);
+  let text = '';
+  try { text = fs.readFileSync(LOG_FILE, 'utf8'); } catch (_) {}
+  const lines = text.split('\n').filter(Boolean);
+  res.type('text/plain').send(lines.slice(-tail).join('\n'));
+});
+
 module.exports = router;

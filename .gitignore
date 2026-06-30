@@ -25,6 +25,8 @@
 !**/data/uploads/.gitkeep
 **/data/plugins/
 **/data/.deserialize-flag
+**/data/access.log
+**/data/moderation.log
 
 # --- Node / npm ------------------------------------------------------------
 node_modules/

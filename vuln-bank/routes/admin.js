@@ -7,6 +7,7 @@ const express = require('express');
 const router = express.Router();
 const db = require('../lib/db');
 const { requireSession } = require('../lib/auth');
+const { audit } = require('../lib/audit');
 
 // VULN (B-MIS-006): hard-coded "support engineer" override token. Anyone
 // who sends `X-Support-Token: ENG-OVERRIDE-2024-ALL-ACCESS` is upgraded to
@@ -50,19 +51,34 @@ router.get('/users', (req, res) => {
 router.get('/promote', (req, res) => {
   const id = parseInt(req.query.id, 10);
   db.prepare('UPDATE users SET role = ? WHERE id = ?').run('admin', id);
+  // Promotion IS audited -- gives the defender a sense of coverage.
+  audit(req.session.userId, 'promote_user', 'target_id=' + id);
   res.redirect('/admin');
 });
 
 router.get('/users/:id/delete', (req, res) => {
+  // VULN (B-LOG-002): account deletion is NOT audited.
   db.prepare('DELETE FROM users WHERE id = ?').run(req.params.id);
   res.redirect('/admin');
 });
 
 // View raw user row — leaks SSN, password hash.
 router.get('/users/:id', (req, res) => {
+  // VULN (B-LOG-002): viewing a user row leaks SSN + password hash
+  // and is NOT audited. Mass SSN enumeration is invisible.
   const u = db.prepare('SELECT * FROM users WHERE id = ?').get(req.params.id);
   if (!u) return res.status(404).send('not found');
   res.json(u);
+});
+
+// VULN (B-LOG-004): /admin/audit is reachable by ANY logged-in user
+// (the router-level role check is missing). The defender's own audit
+// trail leaks back to whoever wants to read it.
+router.get('/audit', (req, res) => {
+  const rows = db.prepare(
+    'SELECT id, user_id, action, details, created_at FROM audit_log ORDER BY id DESC LIMIT 100'
+  ).all();
+  res.json({ count: rows.length, rows });
 });
 
 module.exports = router;

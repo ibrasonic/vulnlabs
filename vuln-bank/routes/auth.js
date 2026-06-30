@@ -6,6 +6,7 @@ const express = require('express');
 const router = express.Router();
 const db = require('../lib/db');
 const { md5, signToken } = require('../lib/auth');
+const { audit } = require('../lib/audit');
 
 router.get('/', (req, res) => res.redirect('/login'));
 
@@ -56,6 +57,9 @@ function finishLogin(req, user) {
   req.session.userId = user.id;
   req.session.username = user.username;
   req.session.role = user.role;
+  // VULN (B-LOG-003): details field is built from the raw posted
+  // username, so newlines forge extra log lines.
+  audit(user.id, 'login_success', 'username=' + user.username);
 }
 
 router.get('/logout', (req, res) => {
@@ -124,6 +128,10 @@ router.get('/forgot', (req, res) => res.render('forgot', { sent: false, error: n
 
 router.post('/forgot', (req, res) => {
   const { email } = req.body;
+  // VULN (B-LOG-003): the email parameter is folded into the audit
+  // detail string verbatim, so an attacker can inject extra log lines
+  // (CRLF log forgery) even without holding a session.
+  audit(null, 'password_reset_requested', 'email=' + (email || ''));
   const u = db.prepare('SELECT * FROM users WHERE email = ?').get(email || '');
   if (u) {
     const token = String(Math.floor(Math.random() * 9000) + 1000); // 4 digits

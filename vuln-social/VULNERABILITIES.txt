@@ -263,6 +263,66 @@ V-SOC-025  Webhook HMAC chain — secret leak + non-constant-time compare
 
 
 -----------------------------------------------------------------
+LOGGING & MONITORING (A09, Ch 36)
+-----------------------------------------------------------------
+
+V-SOC-026  CRLF log injection / log forgery on moderation log
+  Location:  lib/mod-log.js  +  routes/admin.js
+             POST /admin/users/:id/promote
+             GET  /admin/moderation
+  Exploit:   1. Register a user whose USERNAME contains a newline
+                followed by a forged log line:
+                  EVIL=$'evil\n2099-12-31T23:59:59Z actor=ADMIN_SYSTEM action=grant_root target=attacker note=approved'
+                  curl -s -o /dev/null -X POST http://localhost:3003/register \
+                    --data-urlencode "username=$EVIL" \
+                    --data-urlencode "password=Pwn2026!" \
+                    --data-urlencode "email=x@x.test" \
+                    --data-urlencode "display_name=evil" \
+                    -c /tmp/s.jar
+             2. Discover the evil user's id (admin/users?q=evil has
+                no role check -- BAC, V-SOC-030).
+             3. Trigger promotion (also unauthenticated by any logged
+                user thanks to V-SOC-030):
+                  curl -s -b /tmp/s.jar \
+                    "http://localhost:3003/admin/users/$EID/promote"
+             4. Read /admin/moderation -- the forged
+                "actor=ADMIN_SYSTEM action=grant_root" line is now
+                indistinguishable from a real moderator action.
+                  curl -s -b /tmp/s.jar http://localhost:3003/admin/moderation
+  Impact:    Defender's incident timeline is poisoned -- attacker
+             attribution becomes unreliable, real actions can be
+             buried in noise, fake "system-approved" entries can be
+             cited to justify subsequent moves.
+  Mitigation:
+             - Strip or escape \r, \n and other control bytes BEFORE
+               concatenating into the log line.  A log writer should
+               accept a (key, value) pair and serialise it via JSON
+               so the parser cannot be confused by raw bytes.
+             - Use structured logging (NDJSON) end to end so each
+               event is one parsed object, not one line of
+               free-form text.
+
+V-SOC-027  /admin/moderation reachable by any logged-in user
+  Location:  routes/admin.js
+  Exploit:   curl -b cookies.jar http://localhost:3003/admin/moderation
+             A plain user reads the moderator's audit trail and the
+             forged lines they themselves planted (V-SOC-026).
+  Mitigation: real requireAdmin middleware on the router; do not
+             expose log readers from the application -- ship logs
+             to an external SIEM.
+
+V-SOC-028  DM access (read/write) is not logged at all
+  Location:  routes/dm.js
+  Exploit:   Combined with V-SOC-031 (IDOR), an attacker can read
+             every private DM thread between two users with no
+             trace.  The moderator's only signal is downstream
+             complaints from victims.
+  Mitigation: log every DM read with (reader_id, thread_id,
+             message_count, ts) into an append-only store; alert on
+             any reader that is not a participant of the thread.
+
+
+-----------------------------------------------------------------
 ACCESS CONTROL
 -----------------------------------------------------------------
 

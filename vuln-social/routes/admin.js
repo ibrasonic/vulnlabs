@@ -6,6 +6,7 @@ const path = require('path');
 const fs = require('fs');
 const db = require('../lib/db');
 const { requireSession } = require('../lib/auth');
+const { modLog, LOG_FILE: MOD_LOG_FILE } = require('../lib/mod-log');
 
 const UPLOAD_DIR = path.join(__dirname, '..', 'data', 'uploads');
 if (!fs.existsSync(UPLOAD_DIR)) fs.mkdirSync(UPLOAD_DIR, { recursive: true });
@@ -42,7 +43,12 @@ router.get('/users', (req, res) => {
 
 // VULN: GET-based role change (CSRF + BAC).
 router.get('/users/:id/promote', (req, res) => {
+  const target = db.prepare('SELECT username FROM users WHERE id = ?').get(req.params.id);
   db.prepare(`UPDATE users SET role = 'admin' WHERE id = ?`).run(req.params.id);
+  // VULN (S-MOD-LOG-001): `note` is the raw target username, which is
+  // an attacker-controlled field at registration time -- CRLF in the
+  // username forges additional moderation entries.
+  modLog(req.session.username, 'promote_user', req.params.id, target && target.username);
   res.redirect('/admin/users');
 });
 
@@ -69,6 +75,17 @@ router.post('/upload', upload.single('file'), (req, res) => {
   db.prepare('INSERT INTO uploads (user_id, filename, purpose) VALUES (?, ?, ?)')
     .run(req.session.userId, req.file.filename, req.body.purpose || 'misc');
   res.json({ ok: true, url: '/uploads/' + req.file.filename });
+});
+
+// VULN (S-MOD-LOG-003): no role check, any logged-in user can read
+// the moderation log -- including the lines they themselves forged
+// via CRLF in their username.
+router.get('/moderation', (req, res) => {
+  const tail = parseInt(req.query.tail || '200', 10);
+  let text = '';
+  try { text = fs.readFileSync(MOD_LOG_FILE, 'utf8'); } catch (_) {}
+  const lines = text.split('\n').filter(Boolean);
+  res.type('text/plain').send(lines.slice(-tail).join('\n'));
 });
 
 module.exports = router;

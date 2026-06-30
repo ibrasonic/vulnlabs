@@ -582,6 +582,50 @@ V-SHOP-111  Web cache deception of /profile/:anything (Omer Gil 2017 class)
 
 
 -----------------------------------------------------------------
+LOGGING & MONITORING (A09, Ch 36)
+-----------------------------------------------------------------
+
+V-SHOP-120  Sensitive data written to data/access.log
+  Location:  lib/access-log.js (writes one JSON line per request
+             including the parsed body and the Cookie header).
+             Mounted globally in server.js after bodyParser.json.
+  Exploit:   Anyone who reaches the file -- via container volume
+             mount, container escape, log-shipper, backup -- sees:
+               * cleartext POST /login passwords
+               * cleartext POST /register passwords
+               * cleartext POST /checkout {card, cvv, exp}
+               * session cookie values (replayable while valid)
+             Reproduce:
+               curl -s -X POST http://localhost:3002/checkout \
+                 -H 'Content-Type: application/json' \
+                 --data-raw '{"card":"4111111111111234","cvv":"987",
+                              "exp":"12/29","name":"Olivia Park"}'
+               tail -n1 VulnLabs/vuln-shop/data/access.log
+  Mitigation: never log secrets.  Whitelist the fields you log; mask
+              `password`, `card`, `cvv`, `pin`, `token`, and the
+              Cookie header before serialisation.  PCI-DSS forbids
+              storing the CVV at all.
+
+V-SHOP-121  GET /admin/logs reachable by any logged-in customer
+  Location:  routes/admin.js
+  Exploit:   curl -b cookies.jar http://localhost:3002/admin/logs?tail=500
+             A logged-in customer pulls every other customer's password
+             and credit card out of the access log.
+  Mitigation: add a real requireRole('admin') gate.  Better: do not
+              expose log viewers in the application at all -- ship logs
+              to a separate analytics/SIEM tool.
+
+V-SHOP-122  No rate limit / no anomaly detection
+  Location:  routes/auth.js (login + register), routes/checkout.js
+             (coupon, card validation).
+  Exploit:   coupon enumeration, login brute-force, CVV brute-force
+             all leave no signal in the audit trail because there is
+             no audit trail.
+  Mitigation: express-rate-limit per IP + per account on auth and
+              payment routes; alert when M failures / window.
+
+
+-----------------------------------------------------------------
 EXPLOIT QUICK-REFERENCE (PowerShell 5.1)
 -----------------------------------------------------------------
 
