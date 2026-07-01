@@ -61,6 +61,17 @@ router.get('/:id', (req, res) => {
     FROM reviews LEFT JOIN users ON users.id = reviews.user_id
     WHERE product_id = ? ORDER BY reviews.id DESC
   `).all(req.params.id);
+  // VULN (CSP present-but-bypassable): ?csp=1 turns on a Content-Security-
+  // Policy that blocks inline event handlers, so a stored <img onerror>
+  // review stops firing and the page *looks* fixed. But script-src 'self'
+  // still trusts same-origin scripts, and /api/reviews.js is a JSONP gadget
+  // that reflects its callback verbatim. A stored review of
+  //   <script src="/api/reviews.js?callback=confirm(document.domain)//"></script>
+  // is same-origin, so the CSP allows it and the payload runs anyway.
+  if (req.query.csp === '1') {
+    res.setHeader('Content-Security-Policy',
+      "default-src 'self'; script-src 'self'; object-src 'none'; base-uri 'none'");
+  }
   res.render('product_detail', { p, reviews, msg: req.query.msg || '' });
 });
 

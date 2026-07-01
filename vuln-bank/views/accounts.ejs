@@ -1,6 +1,10 @@
 <%- include('partials/header') %>
 <h1>Your accounts</h1>
 <% if (msg) { %><p class="ok"><%- msg %></p><% } %>
+<% if (typeof payto !== 'undefined' && payto) { %>
+  <p class="resume">Resume your last payment:
+    <a href="<%- payto %>">continue to biller &raquo;</a></p>
+<% } %>
 <table>
   <thead><tr><th>Number</th><th>Type</th><th>Balance</th><th></th></tr></thead>
   <tbody>

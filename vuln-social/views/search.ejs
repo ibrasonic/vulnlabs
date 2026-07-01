@@ -4,6 +4,9 @@
   <input name="q" value="<%= q %>" placeholder="username or display name">
   <button>Search</button>
 </form>
+<% if (typeof qEcho !== 'undefined' && q) { %>
+  <p class="result-banner">Showing results for &ldquo;<%- qEcho %>&rdquo;</p>
+<% } %>
 <% if (error) { %><div class="error"><%= error %></div><% } %>
 <ul class="userlist">
   <% rows.forEach(u => { %>

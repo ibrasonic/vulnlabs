@@ -65,4 +65,16 @@ router.get('/v1/users', (req, res) => {
 
 // (real GraphQL endpoint lives in routes/graphql.js, mounted at /graphql)
 
+// VULN: JSONP endpoint reflects the `callback` parameter verbatim into an
+// executable application/javascript response with no validation. Under a
+// script-src 'self' CSP this is a same-origin gadget that upgrades any
+// HTML-injection into full script execution (CSP bypass):
+//   <script src="/api/reviews.js?callback=confirm(document.domain)//"></script>
+router.get('/reviews.js', (req, res) => {
+  const cb = req.query.callback || 'onReviews';
+  const summary = db.prepare('SELECT COUNT(*) AS count, ROUND(AVG(rating), 2) AS avg FROM reviews').get();
+  res.type('application/javascript');
+  res.send(`${cb}(${JSON.stringify(summary)});`);
+});
+
 module.exports = router;

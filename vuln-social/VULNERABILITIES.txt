@@ -133,6 +133,35 @@ V-SOC-013c  WebSocket-driven stored XSS via `broadcast` event
               never grant unauthenticated clients access to broadcast
               channels.
 
+V-SOC-013d  Reflected XSS on the search results banner (+ ?safe=1 bypass)
+  Location:  routes/feed.js (/search) + views/search.ejs
+             (<p>Showing results for &ldquo;<%- qEcho %>&rdquo;</p>)
+  Exploit:   The "Showing results for ..." banner echoes the q parameter
+             unescaped, so any tag fires reflected (social's first
+             non-stored XSS):
+               /search?q=<img src=x onerror=confirm(document.domain)>
+             ?safe=1 turns on a naive <script>-only blacklist that every
+             non-<script> tag bypasses:
+               /search?q=<svg onload=confirm(document.domain)>&safe=1
+             (Reflected sinks are a good place to demonstrate a modal other
+             than alert() -- confirm() returns true/false, prompt() returns
+             a string, document.title='pwned' proves execution silently.)
+  Mitigation: render the echo with <%= %> (HTML-escape); never hand-roll a
+              tag blacklist.
+
+V-SOC-013e  Stored XSS in the profile display-name tooltip (attribute context)
+  Location:  views/user_profile.ejs  (<h1 title="<%- u.display_name %>">)
+  Exploit:   display_name is rendered into a double-quoted title attribute
+             with no escaping, so a stored value closes the attribute and
+             adds an event handler that fires on hover:
+               POST /profile  display_name=" onmouseover=confirm(document.domain) x="
+             Visit /u/<self> and hover the name. The visible name is still
+             HTML-escaped; the bug lives entirely inside the attribute --
+             this is why body-context payloads (<img ...>) fail here and an
+             attribute breakout ( " onmouseover=... ) is required.
+  Mitigation: HTML-escape values placed inside attributes (<%= %>) and
+              quote every attribute.
+
 V-SOC-014  jQuery 1.12.4 prototype-pollution gadget (CVE-2019-11358)
   Location:  views/partials/header.ejs loads jQuery 1.12.4 + app.js calls
              jQuery.extend(true, {}, JSON.parse(?pp=...))

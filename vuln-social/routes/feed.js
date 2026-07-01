@@ -17,14 +17,19 @@ router.get('/', (req, res) => {
 });
 
 // VULN: SQL injection on user search.
+// VULN: reflected XSS on the “Showing results for…” banner (q is echoed
+// unescaped by search.ejs). ?safe=1 turns on a naive <script>-only blacklist
+// that any non-<script> tag (<img>, <svg>, <details>…) trivially bypasses.
 router.get('/search', (req, res) => {
   const q = req.query.q || '';
+  const safe = req.query.safe === '1';
+  const qEcho = safe ? q.replace(/<script[^>]*>.*?<\/script>/gi, '') : q;
   let rows = [];
   let error = null;
   try {
     rows = db.prepare(`SELECT id, username, display_name, avatar, bio FROM users WHERE username LIKE '%${q}%' OR display_name LIKE '%${q}%'`).all();
   } catch (e) { error = e.message; }
-  res.render('search', { q, rows, error });
+  res.render('search', { q, qEcho, safe, rows, error });
 });
 
 module.exports = router;

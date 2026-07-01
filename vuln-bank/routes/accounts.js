@@ -9,7 +9,10 @@ router.use(requireSession);
 
 router.get('/', (req, res) => {
   const accts = db.prepare('SELECT * FROM accounts WHERE user_id = ? ORDER BY id').all(req.session.userId);
-  res.render('accounts', { accounts: accts, msg: req.query.msg || '' });
+  // VULN: reflected XSS in a URL (href) context. `?payto=` is dropped
+  // straight into an <a href="…"> with no scheme validation, so a
+  // `javascript:` URL executes when the “resume payment” link is followed.
+  res.render('accounts', { accounts: accts, msg: req.query.msg || '', payto: req.query.payto || '' });
 });
 
 // Search — VULNs: SQLi via concatenated LIKE, reflected XSS in element body,

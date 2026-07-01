@@ -48,6 +48,30 @@
   document.addEventListener('DOMContentLoaded', applyBanner);
 })();
 
+// VULN: DOM XSS via postMessage with no origin check. The statement
+// “print preview” opens in a popup/iframe and posts a status line back to
+// the opener; the listener drops whatever arrives straight into innerHTML.
+// Any page or iframe can call targetWindow.postMessage(html, '*'):
+//   f.contentWindow.postMessage('<img src=x onerror=confirm(document.domain)>', '*')
+(function () {
+  window.addEventListener('message', function (e) {
+    // No e.origin check, no validation of the payload.
+    var slot = document.getElementById('print-status');
+    if (!slot) {
+      slot = document.createElement('div');
+      slot.id = 'print-status';
+      slot.className = 'hint';
+      var main = document.querySelector('main.container');
+      if (main) main.prepend(slot);
+    }
+    var data = e.data;
+    // sink:
+    slot.innerHTML = (typeof data === 'string') ? data
+      : (data && data.status) ? data.status
+      : String(data == null ? '' : data);
+  });
+})();
+
 // "Internal" telemetry endpoint URL — the bundle bakes it in.
 window.__NOVA_TRUST__ = {
   apiBase: '/api',

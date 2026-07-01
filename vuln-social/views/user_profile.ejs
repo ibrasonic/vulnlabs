@@ -2,7 +2,7 @@
 <header class="profile-head">
   <img class="big-avatar" src="<%= u.avatar %>" alt="">
   <div>
-    <h1><%= u.display_name %> <span class="handle">@<%= u.username %></span></h1>
+    <h1 title="<%- u.display_name %>"><%= u.display_name %> <span class="handle">@<%= u.username %></span></h1>
     <p class="bio"><%- u.bio %></p>
     <p class="counts"><%= followers %> followers &middot; <%= following %> following</p>
     <% if (user && user.username !== u.username) { %>
