@@ -1,5 +1,10 @@
 <%- include('partials/header') %>
 <a href="/products" class="back">&larr; back to catalog</a>
+<script>
+  // VULN: reflected XSS in an inline <script> (script / JSON context). The
+  // ?ref= value is written into a JS string with no escaping.
+  var lastRef = "<%- ref %>";
+</script>
 <div class="product-page">
   <img src="<%= p.image_url %>" alt="<%= p.name %>" onerror="this.style.display='none'">
   <div class="info">

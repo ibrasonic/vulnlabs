@@ -92,7 +92,36 @@ V-SHOP-016  Reflected XSS with `<>`-only encoder on /products/search?safe=1
   Mitigation: never write your own encoder; use the framework's
               context-aware escapers.
 
-V-SHOP-017  DOM XSS via postMessage with no origin check
+V-SHOP-020  Reflected XSS in an UNQUOTED attribute on /products/search
+  Location:  views/product_search.ejs  (<p class="recent-q" data-q=<%- qAttr %>>)
+             routes/products.js (qAttr encodes `<` and `>` but not spaces/quotes)
+  Exploit:   The value lands in an UNQUOTED attribute, so a single space ends
+             the attribute and starts a new one -- no quote breakout needed:
+               /products/search?q=x%20onmouseover=alert(1)
+             renders  <p class="recent-q" data-q=x onmouseover=alert(1)>  which
+             fires on hover. The `<>`-only encoder is irrelevant here.
+  Mitigation: always quote attributes AND HTML-attribute-escape the value
+              (<%= %>); an unquoted attribute is exploitable even when `"` is
+              encoded, because a bare space is enough to break out.
+
+V-SHOP-021  Reflected XSS in an inline <script> (JS-string / </script> breakout)
+  Location:  routes/products.js  GET /products/:id  (ref: req.query.ref)
+             views/product_detail.ejs  (<script>var lastRef = "<%- ref %>";</script>)
+  Exploit:   ?ref= is dropped into a double-quoted JS string with no escaping.
+             Two independent breakouts work:
+               # 1) close the JS string, run code, comment out the tail:
+               /products/1?ref=%22;alert(1);//
+                 -> var lastRef = "";alert(1);//";
+               # 2) the HTML parser closes the block at </script>, then the
+               #    injected element fires (string context no longer matters):
+               /products/1?ref=%3C/script%3E%3Cimg%20src=x%20onerror=alert(1)%3E
+                 -> var lastRef = "</script><img src=x onerror=alert(1)>";
+  Mitigation: never interpolate untrusted input into inline scripts. Emit data
+              as JSON via <%- JSON.stringify(ref) %> inside a
+              <script type="application/json"> block and read it with
+              JSON.parse(el.textContent), or ship it in a data-* attribute and
+              read `dataset`. HTML-escaping alone does NOT make script context
+              safe.
   Location:  public/js/app.js
              window.addEventListener('message', e => slot.innerHTML = e.data)
   Exploit:   Frame the shop on attacker.example and post a string:
@@ -119,6 +148,27 @@ V-SHOP-018  Stored XSS via review markdown -- `[text](javascript:...)` + raw HTM
              body=<noscript><p title="</noscript><img src=x onerror=alert(1)>">
   Mitigation: use a real markdown library with HTML sanitisation enabled;
               reject URLs whose scheme is not in {http, https, mailto}.
+
+V-SHOP-019b Stored XSS under a CSP, bypassed via a same-origin JSONP gadget
+  Location:  routes/products.js  GET /products/:id?csp=1  (sets
+             Content-Security-Policy: script-src 'self')
+             routes/api.js  GET /api/reviews.js?callback=  (JSONP: reflects
+             the callback name verbatim into application/javascript)
+  Exploit:   With ?csp=1 the product page ships a CSP that blocks inline
+             event handlers, so a stored  <img src=x onerror=alert(1)>
+             review no longer fires and the page LOOKS fixed. But
+             script-src 'self' still trusts same-origin scripts, and
+             /api/reviews.js is a JSONP endpoint that reflects its callback.
+             Store this review body, then reload /products/1?csp=1:
+               <script src="/api/reviews.js?callback=confirm(document.domain)//"></script>
+             The <script src> is same-origin, so the CSP allows it; the
+             JSONP responds with  confirm(document.domain)//({...})  and the
+             payload runs. (confirm() proves execution even under the CSP.)
+  Mitigation: a CSP is not a substitute for output encoding. Remove JSONP /
+              reflected callbacks; do not allow 'self' script sources that
+              echo attacker input; add a per-response nonce and require it;
+              and escape the stored review (<%= %> / DOMPurify) so nothing
+              is ever injected in the first place.
 
 V-SHOP-019  Vulnerable component -- marked@0.3.6 raw-HTML pass-through (CH 34)
   Location:  routes/components.js  GET/POST /components/preview-description

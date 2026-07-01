@@ -162,7 +162,18 @@ V-SOC-013e  Stored XSS in the profile display-name tooltip (attribute context)
   Mitigation: HTML-escape values placed inside attributes (<%= %>) and
               quote every attribute.
 
-V-SOC-014  jQuery 1.12.4 prototype-pollution gadget (CVE-2019-11358)
+V-SOC-013f  Reflected XSS via double-URL-encoding (?enc=1 filter bypass)
+  Location:  routes/feed.js (/search, enc branch) + views/search.ejs banner
+  Exploit:   ?enc=1 runs the <script> blacklist on the value Express already
+             decoded once, then decodeURIComponent()s it a SECOND time before
+             echoing. A doubly-encoded payload survives the filter as inert
+             percent-text and is decoded back to live markup for display:
+               /search?q=%253Csvg%2520onload%253Dalert(1)%253E&enc=1
+             Express decodes -> %3Csvg%20onload%3Dalert(1)%3E (no literal
+             <script>, so it passes the filter) -> decodeURIComponent ->
+             <svg onload=alert(1)> is rendered raw and fires.
+  Mitigation: decode input exactly once at the trust boundary; never re-decode
+              after filtering; HTML-escape on output (<%= %>).
   Location:  views/partials/header.ejs loads jQuery 1.12.4 + app.js calls
              jQuery.extend(true, {}, JSON.parse(?pp=...))
   Exploit:   /?pp=%7B%22__proto__%22%3A%7B%22polluted%22%3A1%7D%7D

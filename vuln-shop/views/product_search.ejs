@@ -9,6 +9,10 @@
   <% if (typeof safe !== 'undefined' && safe) { %><input type="hidden" name="safe" value="1"><% } %>
   <button>Search again</button>
 </form>
+<!-- VULN: reflected XSS in an UNQUOTED attribute. qAttr encodes < and > but
+     not spaces or quotes, and the value lands in an unquoted attribute, so a
+     space alone starts a new attribute: q=x onmouseover=alert(1) -->
+<p class="recent-q" data-q=<%- qAttr %>>Recent search remembered.</p>
 <div class="catalog">
   <% rows.forEach(p => { %>
     <div class="product-card">

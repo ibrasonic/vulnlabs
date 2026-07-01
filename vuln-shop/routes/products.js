@@ -72,7 +72,11 @@ router.get('/:id', (req, res) => {
     res.setHeader('Content-Security-Policy',
       "default-src 'self'; script-src 'self'; object-src 'none'; base-uri 'none'");
   }
-  res.render('product_detail', { p, reviews, msg: req.query.msg || '' });
+  // VULN: reflected XSS in an inline <script> (script / JSON context). ?ref=
+  // is dropped into a JS string with no escaping, so a payload can close the
+  // string (";alert(1);//) or close the whole <script> block
+  // (</script><img src=x onerror=alert(1)>).
+  res.render('product_detail', { p, reviews, msg: req.query.msg || '', ref: req.query.ref || '' });
 });
 
 // VULN: stored XSS in review body (no escaping in template).
