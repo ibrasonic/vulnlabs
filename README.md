@@ -25,7 +25,7 @@ setup.
 
 | Lab           | Theme                        | App port | Side service             | Stack                                                                  |
 | ------------- | ---------------------------- | -------- | ------------------------ | ---------------------------------------------------------------------- |
-| `vuln-bank`   | Online banking + admin       | 3001     | MySQL 8 (`mysql:3306`)   | Node 24 + Express + EJS + MySQL 8 (`mysql2` + `deasync`)               |
+| `vuln-bank`   | Online banking + admin       | 3001     | MySQL 8 (`mysql:3306`) · cache (`:8001`) | Node 24 + Express + EJS + MySQL 8 (`mysql2` + `deasync`)               |
 | `vuln-shop`   | E-commerce + admin + GraphQL | 3002     | 5002 (Flask)             | Node 24 + Express + EJS + GraphQL + `node:sqlite` &nbsp;·&nbsp; Python 3 + Flask (Jinja2 SSTI sink) |
 | `vuln-social` | Social network + DMs + LLM   | 3003     | —                        | Node 24 + Express + EJS + Socket.IO + `node:sqlite` &nbsp;·&nbsp; Google Gemini |
 

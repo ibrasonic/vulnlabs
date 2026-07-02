@@ -78,6 +78,9 @@ app.use('/proxy', require('./routes/proxy'));
 app.use('/api', require('./routes/api'));
 app.use('/graphql', require('./routes/graphql'));
 app.use('/components', require('./routes/components'));
+// Injection cousins (Ch 12): NoSQL operator injection + LDAP filter injection.
+app.use('/partner', require('./routes/partners'));
+app.use('/staff', require('./routes/staff'));
 
 // VULN: debug endpoint in production
 app.get('/debug', (req, res) => {
@@ -97,7 +100,14 @@ app.use((err, req, res, next) => {
 });
 
 const db = require('./lib/db');
-const haveUsers = db.prepare('SELECT COUNT(*) AS c FROM users').get().c;
+let haveUsers = 0;
+try {
+  haveUsers = db.prepare('SELECT COUNT(*) AS c FROM users').get().c;
+} catch (e) {
+  // Fresh database on first boot: the users table does not exist yet, so the
+  // COUNT throws. Treat that as "empty" and let seed build the schema.
+  haveUsers = 0;
+}
 if (!haveUsers) {
   console.log('[shop] empty DB, seeding...');
   require('./seed');

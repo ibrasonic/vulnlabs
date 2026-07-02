@@ -1,0 +1,50 @@
+<%- include('partials/header') %>
+<h1>Staff directory (SSO)</h1>
+<p class="hint">Corporate single-sign-on directory lookup and login.</p>
+
+<h2>Search</h2>
+<form method="get" action="/staff/search" class="refine">
+  <label>User ID <input type="text" name="uid" value="<%= (typeof filter !== 'undefined' && mode === 'search' && filter) ? '' : '' %>" placeholder="kate.h"></label>
+  <button>Search</button>
+</form>
+
+<h2>SSO login</h2>
+<form method="post" action="/staff/login" class="refine">
+  <label>User ID <input type="text" name="uid" placeholder="kate.h"></label>
+  <label>Password <input type="password" name="password"></label>
+  <button>Sign in</button>
+</form>
+
+<% if (typeof filter !== 'undefined' && filter) { %>
+  <h2>Filter</h2>
+  <pre><code><%= filter %></code></pre>
+<% } %>
+
+<% if (typeof error !== 'undefined' && error) { %>
+  <p class="err"><%= error %></p>
+<% } %>
+
+<% if (typeof mode !== 'undefined' && mode === 'login-ok') { %>
+  <p class="ok">Signed in as <%= results[0].cn %> (<%= results[0].uid %>).</p>
+<% } %>
+
+<% if (typeof results !== 'undefined' && results && results.length) { %>
+  <h2><%= results.length %> entr<%= results.length === 1 ? 'y' : 'ies' %></h2>
+  <table>
+    <thead><tr><th>uid</th><th>cn</th><th>Title</th><th>Department</th><th>Mail</th></tr></thead>
+    <tbody>
+      <% results.forEach(r => { %>
+        <tr>
+          <td><code><%= r.uid %></code></td>
+          <td><%= r.cn %></td>
+          <td><%= r.title %></td>
+          <td><%= r.department %></td>
+          <td><%= r.mail %></td>
+        </tr>
+      <% }) %>
+    </tbody>
+  </table>
+<% } else if (typeof mode !== 'undefined' && mode === 'search' && !error) { %>
+  <p class="hint">No matching directory entry.</p>
+<% } %>
+<%- include('partials/footer') %>

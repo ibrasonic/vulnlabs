@@ -1,6 +1,10 @@
 <%- include('partials/header') %>
 <h1>Support inbox</h1>
-<p><a href="/admin/users" class="link">Manage users &rarr;</a></p>
+<p>
+  <a href="/admin/users" class="link">Manage users &rarr;</a>
+  &middot; <a href="/admin/diagnostics" class="link">Network diagnostics &rarr;</a>
+  &middot; <a href="/admin/directory" class="link">Staff directory &rarr;</a>
+</p>
 <h2>Open tickets</h2>
 <% for (const m of messages) { %>
   <article class="ticket">

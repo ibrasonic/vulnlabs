@@ -1,0 +1,59 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Legacy staff directory.  Exported from the pre-acquisition HR system and
+  never migrated into the users table.  The admin "Staff directory" search
+  (routes/admin.js -> GET /admin/directory) queries this file with an XPath
+  expression built by string-concatenating the ?name= parameter.
+
+  VULN (B-INJ-XPATH): XPath injection.  The api_token and clearance fields
+  are meant to be invisible to the directory UI (the template only prints
+  name/title/email), but an injected predicate such as  ' or '1'='1  selects
+  every <employee> node and a blind substring() oracle reads any field.
+-->
+<directory>
+  <employee>
+    <username>jmorgan</username>
+    <full_name>Julie Morgan</full_name>
+    <title>Chief Information Security Officer</title>
+    <email>julie.morgan@novatrust.test</email>
+    <department>Security</department>
+    <clearance>top-secret</clearance>
+    <api_token>nt_live_8f2c1a9e4b7d60359ace</api_token>
+  </employee>
+  <employee>
+    <username>achen</username>
+    <full_name>Alice Chen</full_name>
+    <title>Retail Customer (directory placeholder)</title>
+    <email>alice.chen@novatrust.test</email>
+    <department>Retail</department>
+    <clearance>none</clearance>
+    <api_token></api_token>
+  </employee>
+  <employee>
+    <username>dokoro</username>
+    <full_name>David Okoro</full_name>
+    <title>Head of Wire Operations</title>
+    <email>david.okoro@novatrust.test</email>
+    <department>Payments</department>
+    <clearance>secret</clearance>
+    <api_token>nt_live_3b91d7c0fa42e58610bd</api_token>
+  </employee>
+  <employee>
+    <username>rpatel</username>
+    <full_name>Rhea Patel</full_name>
+    <title>SRE, Core Banking Platform</title>
+    <email>rhea.patel@novatrust.test</email>
+    <department>Engineering</department>
+    <clearance>secret</clearance>
+    <api_token>nt_live_a07e44b9c1d2358fe6a1</api_token>
+  </employee>
+  <employee>
+    <username>svc-backup</username>
+    <full_name>Backup Service Account</full_name>
+    <title>Automation</title>
+    <email>svc-backup@novatrust.test</email>
+    <department>Infrastructure</department>
+    <clearance>secret</clearance>
+    <api_token>nt_live_root_0000deadbeefcafe</api_token>
+  </employee>
+</directory>

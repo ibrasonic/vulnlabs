@@ -1,0 +1,24 @@
+<%- include('partials/header') %>
+<h1>Network diagnostics</h1>
+<p class="hint">Operations tool &mdash; ping a payment-gateway or partner host to
+check connectivity from the banking core.</p>
+
+<form method="get" action="/admin/diagnostics" class="refine">
+  <label>Host or IP
+    <input type="text" name="host" value="<%= host %>" placeholder="gateway.partner.test">
+  </label>
+  <button>Run ping</button>
+</form>
+
+<% if (cmd) { %>
+  <h2>Command</h2>
+  <pre><code><%= cmd %></code></pre>
+<% } %>
+
+<% if (output !== null) { %>
+  <h2>Output</h2>
+  <pre class="diag-output"><%= output %></pre>
+<% } %>
+
+<p><a href="/admin" class="link">&larr; Back to admin</a></p>
+<%- include('partials/footer') %>

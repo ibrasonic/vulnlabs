@@ -63,6 +63,23 @@ services:
     volumes:
       - bank-uploads:/app/data
 
+  # Deliberately MISCONFIGURED caching reverse proxy in front of the bank.
+  # Caches GET responses keyed ONLY on the path, so the /admin `Link` header
+  # (built from the unkeyed X-Forwarded-Host) can be poisoned and replayed to
+  # every later visitor. Web-cache-poisoning kill chain, Chapter 12.
+  cache:
+    build: ./cache
+    container_name: vuln-bank-cache
+    restart: unless-stopped
+    depends_on:
+      - bank
+    environment:
+      TARGET:       "http://bank:3001"
+      PORT:         "8001"
+      CACHE_TTL_MS: "30000"
+    ports:
+      - "8001:8001"
+
 volumes:
   bank-mysql-data:
   bank-uploads:

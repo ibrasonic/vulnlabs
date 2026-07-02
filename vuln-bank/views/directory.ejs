@@ -1,0 +1,41 @@
+<%- include('partials/header') %>
+<h1>Staff directory (legacy)</h1>
+<p class="hint">Pre-acquisition employee lookup. Search by exact username.</p>
+
+<form method="get" action="/admin/directory" class="refine">
+  <label>Username
+    <input type="text" name="name" value="<%= name %>" placeholder="jmorgan">
+  </label>
+  <button>Look up</button>
+</form>
+
+<% if (typeof expr !== 'undefined' && expr) { %>
+  <h2>Query</h2>
+  <pre><code><%= expr %></code></pre>
+<% } %>
+
+<% if (typeof error !== 'undefined' && error) { %>
+  <p class="err">Directory error: <%= error %></p>
+<% } %>
+
+<% if (typeof results !== 'undefined' && results.length) { %>
+  <h2><%= results.length %> match<%= results.length === 1 ? '' : 'es' %></h2>
+  <table>
+    <thead><tr><th>Username</th><th>Full name</th><th>Title</th><th>Email</th></tr></thead>
+    <tbody>
+      <% results.forEach(r => { %>
+        <tr>
+          <td><code><%= r.username %></code></td>
+          <td><%= r.full_name %></td>
+          <td><%= r.title %></td>
+          <td><%= r.email %></td>
+        </tr>
+      <% }) %>
+    </tbody>
+  </table>
+<% } else if (typeof expr !== 'undefined' && expr && !error) { %>
+  <p class="hint">No matching employee.</p>
+<% } %>
+
+<p><a href="/admin" class="link">&larr; Back to admin</a></p>
+<%- include('partials/footer') %>

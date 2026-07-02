@@ -110,7 +110,14 @@ app.use((err, req, res, next) => {
 
 // Run seed automatically if DB looks empty.
 const db = require('./lib/db');
-const haveUsers = db.prepare('SELECT COUNT(*) AS c FROM users').get().c;
+let haveUsers = 0;
+try {
+  haveUsers = db.prepare('SELECT COUNT(*) AS c FROM users').get().c;
+} catch (e) {
+  // Fresh database on first boot: the users table does not exist yet, so the
+  // COUNT throws ER_NO_SUCH_TABLE. Treat that as "empty" and let seed build it.
+  haveUsers = 0;
+}
 if (!haveUsers) {
   console.log('[bank] empty DB detected, running seed...');
   require('./seed');
