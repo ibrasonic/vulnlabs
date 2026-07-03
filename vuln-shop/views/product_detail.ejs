@@ -6,7 +6,7 @@
   var lastRef = "<%- ref %>";
 </script>
 <div class="product-page">
-  <img src="<%= p.image_url %>" alt="<%= p.name %>" onerror="this.style.display='none'">
+  <img src="/proxy/image?u=<%= encodeURIComponent(req.protocol + '://' + req.get('host') + p.image_url) %>" alt="<%= p.name %>" onerror="this.style.display='none'">
   <div class="info">
     <h1><%= p.name %></h1>
     <p class="sku"><%= p.sku %> &middot; <%= p.category %></p>

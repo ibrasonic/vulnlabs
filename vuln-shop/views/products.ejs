@@ -15,7 +15,7 @@
   <% prods.forEach(p => { %>
     <div class="product-card">
       <a href="/products/<%= p.id %>">
-        <img src="<%= p.image_url %>" alt="<%= p.name %>" onerror="this.style.display='none'">
+        <img src="/proxy/image?u=<%= encodeURIComponent(req.protocol + '://' + req.get('host') + p.image_url) %>" alt="<%= p.name %>" onerror="this.style.display='none'">
         <h3><%= p.name %></h3>
         <p class="sku"><%= p.sku %> &middot; <%= p.category %></p>
         <p class="price">$<%= (p.price_cents / 100).toFixed(2) %></p>
