@@ -6,7 +6,10 @@ services:
       PORT: "3002"
       HOST: "0.0.0.0"
       EMAIL_SERVICE_URL: "http://email:5002"
-    depends_on: [email]
+    depends_on: [email, metadata]
+    networks:
+      default: {}
+      imds: {}
     volumes:
       # Named volume — SQLite WAL mode is unreliable on Windows DrvFs bind mounts.
       - shop-data:/app/data
@@ -16,6 +19,25 @@ services:
     environment:
       PORT: "5002"
       HOST: "0.0.0.0"
+    networks:
+      default: {}
+  metadata:
+    # Simulated AWS instance metadata service (IMDS). Fake, inert credentials.
+    # Bound to the real link-local metadata address so an SSRF against the shop
+    # can reach http://169.254.169.254/... exactly as on a real EC2 host. It is
+    # unrouteable from your host/browser — reachable only from inside the lab.
+    build: ./metadata-mock
+    networks:
+      imds:
+        ipv4_address: 169.254.169.254
 
 volumes:
   shop-data:
+
+networks:
+  default: {}
+  imds:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 169.254.169.0/24
