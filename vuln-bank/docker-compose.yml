@@ -80,6 +80,18 @@ services:
     ports:
       - "8001:8001"
 
+  # NovaTrust "Applications Center" — the customer-facing portal where borrowers
+  # submit supporting documents (pay stubs, IDs, receipts) for loan / card /
+  # mortgage / KYC / dispute applications. Runs PHP under Apache so uploaded
+  # files can actually execute: this is the file-upload -> webshell -> RCE lab
+  # (Chapter 17), with five forms at escalating filter strength.
+  applyportal:
+    build: ./apply-portal
+    container_name: vuln-bank-applyportal
+    restart: unless-stopped
+    ports:
+      - "3010:80"
+
 volumes:
   bank-mysql-data:
   bank-uploads:
