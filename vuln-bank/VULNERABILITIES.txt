@@ -48,6 +48,7 @@ Hidden secret in JS bundle: sk_live_NOVATRUST_DEBUG_4242424242424242
  [17]  Weak password hashing (MD5)           (Ch 12)
  [18]  JWT — alg=none accepted               (Ch 26)
  [19]  JWT — weak HS256 secret               (Ch 26)
+ [19a] JWT — Partner API v2: algorithm confusion + jwk/jku/kid injection (Ch 18)
  [20]  MFA bypass — client-controlled success (Ch 19)
  [21]  No rate limiting — MFA + reset brute force (Ch 19)
  [22]  Weak password reset — 4-digit numeric token (Ch 16, 19)
@@ -563,6 +564,36 @@ EXPLOIT
 
 MITIGATION
   Use 256-bit random secrets stored in a KMS/secret store.
+
+--------------------------------------------------------------------------------
+ [19a] JWT — Partner API v2 header-injection & algorithm confusion (Ch 18)
+--------------------------------------------------------------------------------
+Files:      lib/jwt-lab.js (verifier), routes/apiv2.js (endpoints)
+Base:       http://localhost:3001/api/v2  (RS256 + published JWKS)
+Endpoints:  POST /api/v2/login            -> RS256 access_token
+            GET  /api/v2/.well-known/jwks.json  -> public key set
+            GET  /api/v2/me               -> whoami (verified by verifyV2)
+            GET  /api/v2/admin/report     -> role-gated proof endpoint
+The verifier honours whatever the token header asks for (precedence
+jwk -> jku -> kid -> alg), so it is vulnerable four ways. All tested to
+a live /api/v2/admin/report 200.
+
+EXPLOIT (forge role:admin any one of these)
+  D. Algorithm confusion: fetch JWKS public key, convert JWK->PEM, sign an
+     alg=HS256 token using the PEM as the HMAC secret (server accepts RS256
+     AND HS256 with its public key).
+  A. jwk injection: put your own RSA public key in the header `jwk`, sign
+     with your private key.
+  B. jku injection (SSRF): host {"keys":[your-jwk]} at a URL the server can
+     reach, set header `jku` to it, sign with your private key.
+  C. kid path traversal: kid=../../../../../../dev/null -> key file is empty
+     -> sign HS256 with an empty secret.
+
+MITIGATION
+  Pin ONE algorithm and pass a typed KeyObject (the library then refuses to
+  use an RSA key as an HMAC secret); reject jwk/jku/x5u headers; resolve kid
+  against a server-side allow-list Map (never a filesystem path or SQL);
+  verify iss/aud.
 
 --------------------------------------------------------------------------------
  [20] MFA bypass — client-controlled success

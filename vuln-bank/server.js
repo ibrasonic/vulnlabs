@@ -86,6 +86,7 @@ app.use('/admin/integrity', require('./routes/integrity'));
 app.use('/admin',    require('./routes/admin'));
 app.use('/support',  require('./routes/support'));
 app.use('/sqli',     require('./routes/sqli'));
+app.use('/api/v2',   require('./routes/apiv2'));   // Partner API v2 (RS256 + JWKS)
 app.use('/api',      require('./routes/api'));
 app.use('/',         require('./routes/oauth'));
 
