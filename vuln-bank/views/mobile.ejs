@@ -1,0 +1,93 @@
+<%- include('partials/header') %>
+<h1>NovaTrust Mobile &amp; Partner API</h1>
+<p class="muted">Your account is available in the NovaTrust mobile app and through the
+NovaTrust <strong>Partner API v2</strong>. This page is the mobile web dashboard &mdash;
+it talks to the Partner API exactly the way our iOS / Android apps and integration
+partners do.</p>
+
+<div class="ticket">
+  <h3>Mobile dashboard</h3>
+  <p id="m-status" class="muted">Connecting to the Partner API&hellip;</p>
+  <table id="m-profile" hidden>
+    <tr><th>Username</th><td id="m-user"></td></tr>
+    <tr><th>Email</th><td id="m-email"></td></tr>
+    <tr><th>Role</th><td id="m-role"></td></tr>
+  </table>
+</div>
+
+<h2>Developer &amp; Partner API</h2>
+<p class="muted">Integrate with NovaTrust using signed <strong>RS256</strong> access
+tokens. Partners verify token signatures against our published JSON Web Key Set
+(JWKS) &mdash; no shared secret required.</p>
+<table>
+  <thead><tr><th>Endpoint</th><th>What it returns</th><th></th></tr></thead>
+  <tbody>
+    <tr>
+      <td><code>GET /mobile/token</code></td>
+      <td>An access token for your current session (mobile bootstrap).</td>
+      <td></td>
+    </tr>
+    <tr>
+      <td><code>GET /api/v2/me</code></td>
+      <td>Your partner profile.</td>
+      <td><button type="button" class="btn ghost" onclick="tryMe()">Try</button></td>
+    </tr>
+    <tr>
+      <td><code>GET /api/v2/admin/report</code></td>
+      <td>Partner revenue report <em>(admin only)</em>.</td>
+      <td><button type="button" class="btn ghost" onclick="tryReport()">Try</button></td>
+    </tr>
+    <tr>
+      <td><a href="/api/v2/.well-known/jwks.json"><code>/api/v2/.well-known/jwks.json</code></a></td>
+      <td>Public key set used to verify our tokens.</td>
+      <td></td>
+    </tr>
+  </tbody>
+</table>
+
+<h3>Your Partner API access token</h3>
+<textarea id="m-token" rows="4" readonly style="width:100%;font-family:monospace"></textarea>
+<pre id="m-out" hidden></pre>
+
+<script>
+let TOKEN = null;
+async function getToken() {
+  if (TOKEN) return TOKEN;
+  const r = await fetch('/mobile/token');
+  const j = await r.json();
+  TOKEN = j.access_token;
+  document.getElementById('m-token').value = TOKEN || '';
+  return TOKEN;
+}
+function show(text) {
+  const el = document.getElementById('m-out');
+  el.hidden = false;
+  el.textContent = text;
+}
+async function boot() {
+  try {
+    const t = await getToken();
+    const r = await fetch('/api/v2/me', { headers: { Authorization: 'Bearer ' + t } });
+    const j = await r.json();
+    document.getElementById('m-user').textContent  = (j.user && j.user.username) || '';
+    document.getElementById('m-email').textContent = (j.user && j.user.email) || '';
+    document.getElementById('m-role').textContent  = (j.token_claims && j.token_claims.role) || '';
+    document.getElementById('m-status').textContent = 'Connected to the Partner API as ' + ((j.user && j.user.username) || '') + '.';
+    document.getElementById('m-profile').hidden = false;
+  } catch (e) {
+    document.getElementById('m-status').textContent = 'Could not reach the Partner API.';
+  }
+}
+async function tryMe() {
+  const t = await getToken();
+  const r = await fetch('/api/v2/me', { headers: { Authorization: 'Bearer ' + t } });
+  show('GET /api/v2/me -> ' + r.status + '\n' + JSON.stringify(await r.json(), null, 2));
+}
+async function tryReport() {
+  const t = await getToken();
+  const r = await fetch('/api/v2/admin/report', { headers: { Authorization: 'Bearer ' + t } });
+  show('GET /api/v2/admin/report -> ' + r.status + '\n' + JSON.stringify(await r.json(), null, 2));
+}
+boot();
+</script>
+<%- include('partials/footer') %>
