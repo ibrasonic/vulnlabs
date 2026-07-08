@@ -902,6 +902,11 @@ MITIGATION
 --------------------------------------------------------------------------------
 Endpoint:   GET /oauth/authorize, POST /oauth/token
 Files:      routes/oauth.js (redirectUriAllowed: uses startsWith)
+Discovery:  The whole OAuth surface is reachable from the bank UI: sign in ->
+            Settings -> Connected apps & API access (/connected) -> "Sign in with
+            NovaTrust" -> the demo Partner Portal (/partners/demo-app), which
+            starts the authorization-code flow (authorize + callback land in
+            History). Also GET /.well-known/openid-configuration for the map.
 
 EXPLOIT
   # Registered redirect_uri: http://localhost:3001/partners/demo-app/callback
