@@ -86,7 +86,7 @@ app.use('/admin/integrity', require('./routes/integrity'));
 app.use('/admin',    require('./routes/admin'));
 app.use('/support',  require('./routes/support'));
 app.use('/sqli',     require('./routes/sqli'));
-app.use('/mobile',   require('./routes/mobile'));  // Mobile & Partner API UI (v2 discovery surface)
+app.use('/connected', require('./routes/connected'));  // Connected apps & API access (first-party v2 surface)
 app.use('/api/v2',   require('./routes/apiv2'));   // Partner API v2 (RS256 + JWKS)
 app.use('/api',      require('./routes/api'));
 app.use('/',         require('./routes/oauth'));
@@ -132,7 +132,7 @@ app.listen(PORT, HOST, () => {
   console.log(` Login:       http://localhost:${PORT}/login`);
   console.log(` Register:    http://localhost:${PORT}/register`);
   console.log(` Dashboard:   http://localhost:${PORT}/accounts (after login)`);
-  console.log(` Mobile app:  http://localhost:${PORT}/mobile (after login)`);
+  console.log(` Connected:   http://localhost:${PORT}/connected (Settings, after login)`);
   console.log(` Admin panel: http://localhost:${PORT}/admin (login as julie.morgan)`);
   console.log(` Debug:       http://localhost:${PORT}/debug`);
   console.log(` API base:    http://localhost:${PORT}/api`);

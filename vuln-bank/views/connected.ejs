@@ -1,0 +1,56 @@
+<%- include('partials/header') %>
+<h1>Connected apps &amp; API access</h1>
+<p class="muted">Manage the third-party apps connected to your NovaTrust account and your
+personal <strong>API access</strong>. NovaTrust exposes a read API for approved apps and
+partners; access tokens are signed with <strong>RS256</strong> and verified against our
+published key set (JWKS) &mdash; no shared secret required.</p>
+
+<h2>Apps connected to your account</h2>
+<table>
+  <thead><tr><th>App</th><th>Access granted</th><th>Connected</th><th></th></tr></thead>
+  <tbody>
+    <tr><td>MoneyWise Budgeting</td><td>Read balances &amp; transactions</td><td>2026-05-11</td><td><a href="/connected">Revoke</a></td></tr>
+    <tr><td>TaxPrep 2026</td><td>Read statements</td><td>2026-03-02</td><td><a href="/connected">Revoke</a></td></tr>
+  </tbody>
+</table>
+
+<h2>Your API access</h2>
+<div class="ticket">
+  <h3>API profile</h3>
+  <p id="c-status" class="muted">Loading your API profile&hellip;</p>
+  <table id="c-profile" hidden>
+    <tr><th>Username</th><td id="c-user"></td></tr>
+    <tr><th>Email</th><td id="c-email"></td></tr>
+  </table>
+</div>
+
+<h3>Your access token</h3>
+<p class="muted">Use this bearer token to call the NovaTrust API on your own behalf.</p>
+<textarea id="c-token" rows="4" readonly style="width:100%;font-family:monospace"></textarea>
+
+<h3>Developer resources</h3>
+<table>
+  <thead><tr><th>Resource</th><th>What it is</th></tr></thead>
+  <tbody>
+    <tr><td><code>GET /api/v2/me</code></td><td>Your API profile (this page uses it).</td></tr>
+    <tr><td><a href="/api/v2/.well-known/jwks.json"><code>/api/v2/.well-known/jwks.json</code></a></td><td>Public key set (JWKS) for verifying our RS256 tokens.</td></tr>
+  </tbody>
+</table>
+
+<script>
+(async function () {
+  try {
+    const t = await (await fetch('/connected/token')).json();
+    document.getElementById('c-token').value = t.access_token || '';
+    const r = await fetch('/api/v2/me', { headers: { Authorization: 'Bearer ' + t.access_token } });
+    const j = await r.json();
+    document.getElementById('c-user').textContent  = (j.user && j.user.username) || '';
+    document.getElementById('c-email').textContent = (j.user && j.user.email) || '';
+    document.getElementById('c-status').textContent = 'Connected to the NovaTrust API as ' + ((j.user && j.user.username) || '') + '.';
+    document.getElementById('c-profile').hidden = false;
+  } catch (e) {
+    document.getElementById('c-status').textContent = 'Could not reach the NovaTrust API.';
+  }
+})();
+</script>
+<%- include('partials/footer') %>

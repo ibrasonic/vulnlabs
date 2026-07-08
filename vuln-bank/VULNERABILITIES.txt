@@ -569,20 +569,23 @@ MITIGATION
  [19a] JWT — Partner API v2 header-injection & algorithm confusion (Ch 18)
 --------------------------------------------------------------------------------
 Files:      lib/jwt-lab.js (verifier), routes/apiv2.js (endpoints),
-            routes/mobile.js + views/mobile.ejs (UI discovery surface)
+            routes/connected.js + views/connected.ejs (first-party API surface)
 Base:       http://localhost:3001/api/v2  (RS256 + published JWKS)
-Discovery:  Sign in and open "Mobile" in the top nav (GET /mobile). The mobile
-            dashboard SPA fetches GET /mobile/token (session->RS256 bridge),
+Discovery:  The bank web front-end is API-backed. Just sign in: the account
+            dashboard fetches GET /connected/token (session->RS256 bridge),
             then GET /api/v2/me with that Bearer -> both land in History, so
-            the whole v2 surface is reachable by browsing (no prior knowledge).
-            The page also lists /api/v2/admin/report, which a customer token
-            gets 403 on -> the motive to forge role=admin four ways.
-Endpoints:  GET  /mobile                  -> mobile dashboard (UI entry point)
-            GET  /mobile/token            -> RS256 access_token for the session
+            the v2 surface is reachable by using the app (no prior knowledge).
+            Settings -> "Connected apps & API access" (GET /connected) shows
+            the token and links the JWKS. The admin endpoint is NOT advertised;
+            find /api/v2/admin/report by enumerating /api/v2/* (improper
+            inventory, [30]). A customer token gets 403 there -> the motive to
+            forge role=admin four ways.
+Endpoints:  GET  /connected               -> Settings: connected apps & API access
+            GET  /connected/token         -> RS256 access_token for the session
             POST /api/v2/login            -> RS256 access_token
             GET  /api/v2/.well-known/jwks.json  -> public key set
             GET  /api/v2/me               -> whoami (verified by verifyV2)
-            GET  /api/v2/admin/report     -> role-gated proof endpoint
+            GET  /api/v2/admin/report     -> role-gated proof endpoint (recon)
 The verifier honours whatever the token header asks for (precedence
 jwk -> jku -> kid -> alg), so it is vulnerable four ways. All tested to
 a live /api/v2/admin/report 200.

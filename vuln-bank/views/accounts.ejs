@@ -1,5 +1,6 @@
 <%- include('partials/header') %>
 <h1>Your accounts</h1>
+<p id="dash-greeting" class="muted" hidden></p>
 <% if (msg) { %><p class="ok"><%- msg %></p><% } %>
 <% if (typeof payto !== 'undefined' && payto) { %>
   <p class="resume">Resume your last payment:
@@ -22,4 +23,18 @@
   <label>Find an account / payee <input name="q" placeholder="name or number"></label>
   <button>Search</button>
 </form>
+<script>
+// The dashboard is API-backed: confirm the logged-in session against the
+// NovaTrust API and personalise the greeting. This mints a short-lived RS256
+// token for the session (GET /connected/token) and calls GET /api/v2/me.
+(async function () {
+  try {
+    const t = await (await fetch('/connected/token')).json();
+    const r = await fetch('/api/v2/me', { headers: { Authorization: 'Bearer ' + t.access_token } });
+    const j = await r.json();
+    const g = document.getElementById('dash-greeting');
+    if (g && j.user) { g.textContent = 'Welcome back, ' + j.user.username + '.'; g.hidden = false; }
+  } catch (e) { /* non-fatal */ }
+})();
+</script>
 <%- include('partials/footer') %>
