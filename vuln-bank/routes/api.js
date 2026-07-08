@@ -7,7 +7,7 @@ const express = require('express');
 const router = express.Router();
 const fetch = require('node-fetch');
 const db = require('../lib/db');
-const { requireJwt } = require('../lib/auth');
+const { requireJwt, requireSession, signToken } = require('../lib/auth');
 
 // VULN: CORS — Origin reflected, credentials allowed (Ch 17).
 router.use((req, res, next) => {
@@ -18,6 +18,17 @@ router.use((req, res, next) => {
   res.setHeader('Access-Control-Allow-Headers', 'Authorization, Content-Type');
   if (req.method === 'OPTIONS') return res.status(200).end();
   next();
+});
+
+// Session -> v1 API token bridge. The bank's own web pages are API-backed:
+// once you are signed in, the browser exchanges the session for a short-lived
+// mobile-API token (HS256) and calls /api/* on your behalf. This is why simply
+// USING the app (Profile, Transfer) makes real GET /api/me, PUT /api/users/:id
+// and POST /api/transfers requests land in Reqlore's History — no prior
+// knowledge of the API needed.
+router.get('/token', requireSession, (req, res) => {
+  const token = signToken({ sub: req.session.userId, username: req.session.username, role: req.session.role });
+  res.json({ token, token_type: 'Bearer', expires_in: 3600 });
 });
 
 router.get('/me', requireJwt, (req, res) => {
@@ -139,18 +150,61 @@ router.get(['/openapi.json', '/swagger.json'], (req, res) => {
     openapi: '3.0.0',
     info: { title: 'NovaTrust Mobile API', version: '3.1.0' },
     servers: [{ url: 'http://localhost:3001/api' }],
+    components: {
+      securitySchemes: { bearer: { type: 'http', scheme: 'bearer', bearerFormat: 'JWT' } },
+      schemas: {
+        Transfer: {
+          type: 'object',
+          required: ['from_account', 'to_account', 'amount_cents'],
+          properties: {
+            from_account: { type: 'string', example: '4002-1188-0001' },
+            to_account: { type: 'string', example: '4002-1188-0002' },
+            amount_cents: { type: 'integer', example: 2500 },
+          },
+        },
+        UserPatch: {
+          type: 'object',
+          properties: {
+            email: { type: 'string' }, full_name: { type: 'string' },
+            phone: { type: 'string' }, address: { type: 'string' },
+            role: { type: 'string', enum: ['customer', 'admin'], 'x-note': 'internal — set by staff only' },
+            mfa_enabled: { type: 'boolean' },
+          },
+        },
+        Batch: {
+          type: 'object',
+          properties: { ids: { type: 'array', items: { type: 'integer' }, example: [1, 2, 3] } },
+        },
+        RoleChange: {
+          type: 'object',
+          properties: { role: { type: 'string', enum: ['customer', 'admin'] } },
+        },
+      },
+    },
+    security: [{ bearer: [] }],
     paths: {
-      '/login': { post: {} },
-      '/me': { get: {} },
-      '/users/{id}': { get: {}, put: {} },
-      '/accounts/{id}': { get: {} },
-      '/accounts/{id}/transfers': { get: {} },
-      '/batch': { post: {} },
-      '/transfers': { post: {} },
-      '/fx': { get: {} },
-      '/admin/users': { get: {} },
-      '/admin/users/{id}/role': { post: {} },
-      '/v1/users': { get: { 'x-note': 'legacy v1, unauthenticated \u2014 do not expose' } },
+      '/login': { post: { summary: 'Exchange username/password for a bearer token', security: [] } },
+      '/me': { get: { summary: 'The signed-in user (returns the full row)' } },
+      '/users/{id}': {
+        get: { summary: 'Read a user by id', parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'integer' } }] },
+        put: {
+          summary: 'Update a user',
+          parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'integer' } }],
+          requestBody: { content: { 'application/json': { schema: { $ref: '#/components/schemas/UserPatch' } } } },
+        },
+      },
+      '/accounts/{id}': { get: { summary: 'Read an account by id', parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'integer' } }] } },
+      '/accounts/{id}/transfers': { get: { summary: 'Transactions for an account' } },
+      '/batch': { post: { summary: 'Look up many users at once', requestBody: { content: { 'application/json': { schema: { $ref: '#/components/schemas/Batch' } } } } } },
+      '/transfers': { post: { summary: 'Move money between accounts', requestBody: { content: { 'application/json': { schema: { $ref: '#/components/schemas/Transfer' } } } } } },
+      '/fx': { get: { summary: 'Convert an amount', parameters: [
+        { name: 'to', in: 'query', schema: { type: 'string' } },
+        { name: 'amount', in: 'query', schema: { type: 'number' } },
+        { name: 'provider', in: 'query', schema: { type: 'string' }, description: 'rates feed URL' },
+      ] } },
+      '/admin/users': { get: { summary: 'List all users (staff)' } },
+      '/admin/users/{id}/role': { post: { summary: 'Reassign a user role (staff)', requestBody: { content: { 'application/json': { schema: { $ref: '#/components/schemas/RoleChange' } } } } } },
+      '/v1/users': { get: { summary: 'Legacy directory', security: [], 'x-note': 'legacy v1, unauthenticated \u2014 do not expose' } },
     },
   });
 });

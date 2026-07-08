@@ -12,6 +12,59 @@
   <button>Save</button>
 </form>
 
+<h2>Your NovaTrust API profile</h2>
+<p class="muted">The bank app is API-backed. This panel loads over the NovaTrust mobile
+API (<code>GET /api/me</code>) using a token minted from your session, and saves your
+contact details back through it (<code>PUT /api/users/&lt;you&gt;</code>).</p>
+<div class="ticket">
+  <p id="api-status" class="muted">Loading your API profile&hellip;</p>
+  <form id="api-contact" hidden>
+    <label>Full name <input id="api-fullname"></label>
+    <label>Phone <input id="api-phone"></label>
+    <button type="submit">Update contact details</button>
+    <span id="api-saved" class="ok"></span>
+  </form>
+</div>
+<script>
+(function () {
+  var me = null, token = null;
+  async function apiToken() {
+    if (token) return token;
+    token = (await (await fetch('/api/token')).json()).token;
+    return token;
+  }
+  async function load() {
+    try {
+      var t = await apiToken();
+      me = await (await fetch('/api/me', { headers: { Authorization: 'Bearer ' + t } })).json();
+      document.getElementById('api-status').textContent =
+        'Signed in to the NovaTrust API as ' + me.username + ' (id ' + me.id + ').';
+      document.getElementById('api-fullname').value = me.full_name || '';
+      document.getElementById('api-phone').value = me.phone || '';
+      document.getElementById('api-contact').hidden = false;
+    } catch (e) {
+      document.getElementById('api-status').textContent = 'Could not reach the NovaTrust API.';
+    }
+  }
+  document.getElementById('api-contact').addEventListener('submit', async function (ev) {
+    ev.preventDefault();
+    var t = await apiToken();
+    // The app sends only the two fields the form edits.
+    var body = {
+      full_name: document.getElementById('api-fullname').value,
+      phone: document.getElementById('api-phone').value
+    };
+    var r = await fetch('/api/users/' + me.id, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + t },
+      body: JSON.stringify(body)
+    });
+    document.getElementById('api-saved').textContent = r.ok ? 'saved' : 'error';
+  });
+  load();
+})();
+</script>
+
 <h2>Connected apps &amp; API access</h2>
 <p class="muted">Review the third-party apps connected to your account and your
 personal API access token.</p>

@@ -17,4 +17,41 @@
   <label>Memo <input name="memo" maxlength="60"></label>
   <button>Send</button>
 </form>
+
+<h2>Instant transfer <span class="muted">(NovaTrust app)</span></h2>
+<p class="muted">The mobile app moves money over the NovaTrust API
+(<code>POST /api/transfers</code>) with a token minted from your session.</p>
+<form id="api-xfer">
+  <label>From
+    <select id="ax-from">
+      <% for (const a of accounts) { %>
+        <option value="<%= a.account_number %>"><%= a.account_number %> &mdash; $<%= (a.balance_cents / 100).toFixed(2) %></option>
+      <% } %>
+    </select>
+  </label>
+  <label>To (account number) <input id="ax-to" required></label>
+  <label>Amount (cents) <input id="ax-amount" type="number" min="1" required></label>
+  <button type="submit">Send via app</button>
+  <span id="ax-result" class="ok"></span>
+</form>
+<script>
+(function () {
+  document.getElementById('api-xfer').addEventListener('submit', async function (ev) {
+    ev.preventDefault();
+    var t = (await (await fetch('/api/token')).json()).token;
+    var body = {
+      from_account: document.getElementById('ax-from').value,
+      to_account: document.getElementById('ax-to').value,
+      amount_cents: parseInt(document.getElementById('ax-amount').value, 10)
+    };
+    var r = await fetch('/api/transfers', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + t },
+      body: JSON.stringify(body)
+    });
+    var j = await r.json();
+    document.getElementById('ax-result').textContent = r.ok ? 'sent' : (j.error || 'error');
+  });
+})();
+</script>
 <%- include('partials/footer') %>

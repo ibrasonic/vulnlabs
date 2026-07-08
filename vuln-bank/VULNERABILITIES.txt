@@ -65,6 +65,8 @@ Hidden secret in JS bundle: sk_live_NOVATRUST_DEBUG_4242424242424242
  [30c] Sensitive flow (API6) — POST /api/transfers, no ownership/limit/idempotency (Ch 20)
  [30d] Unsafe consumption (API10) / SSRF (API7) — GET /api/fx?provider= trusts caller URL+reply (Ch 20)
  [30e] Improper inventory (API9) — public /api/openapi.json + /api/swagger.json spec (Ch 20)
+ [30f] API-backed UI — GET /api/token bridge; Profile calls GET /api/me + PUT /api/users/:id,
+       Transfer calls POST /api/transfers (real requests captured by using the app) (Ch 20)
  [31]  CORS — origin reflection w/ credentials (Ch 17, 23)
  [32]  Cache poisoning — X-Forwarded-Host echoed in Link header (Ch 31)
  [33]  Debug endpoint exposed — /debug        (Ch 17)
@@ -770,10 +772,19 @@ MITIGATION
 --------------------------------------------------------------------------------
  [30a-e] API Security additions (Chapter 20) — routes/api.js
 --------------------------------------------------------------------------------
+The app is API-backed, so you CAPTURE real requests by using it (no guessing):
+  - Sign in, open Profile  -> the page calls  GET /api/me  (your BASE request) and,
+    on "Update contact details",  PUT /api/users/<you>  (mass-assignment target).
+  - Open Transfer -> "Instant transfer (app)" sends  POST /api/transfers .
+  These use a session->v1 token bridge:  GET /api/token  (HS256, sub/role of the
+  session).  All of them land in Reqlore's History; you then send-to-tool + mutate.
 Discovery:  GET /api/openapi.json (no auth) lists every endpoint incl the admin
-            and legacy ones; GET /api/v1/users (no auth) enumerates users+roles.
-Auth:       v1 JWT via POST /api/login (alice.chen/Password123!); alg=none forgery
-            works (Ch 18). Admin is julie.morgan (sub 6).
+            and legacy ones AND their request-body schemas (Transfer, UserPatch,
+            Batch, RoleChange), so the body FORMAT is read from the spec, not invented;
+            GET /api/v1/users (no auth) enumerates users+roles.
+Auth:       v1 JWT via the UI (GET /api/token while signed in) or POST /api/login
+            (alice.chen/Password123!); alg=none forgery works (Ch 18). Admin is
+            julie.morgan (sub 6).
 
   [30a] URC (API4) — POST /api/batch
     curl -s -X POST localhost:3001/api/batch -H "Authorization: Bearer $T" \
