@@ -46,8 +46,8 @@ Hidden secret in JS bundle: sk_live_NOVATRUST_DEBUG_4242424242424242
         (/transfer/initiate,confirm) + time-sensitive login code (/login/code) + partial
         construction (/accounts/open) + hidden multi-step wire (/wire/review vs /wire/execute)
  [14]  No CSRF protection — GET transfer     (Ch 23)
- [15]  Clickjacking — no X-Frame-Options     (Ch 23)
- [16]  Open redirect — /go?u= and /login?next= (Ch 16)
+ [15]  Clickjacking — no X-Frame-Options / frame-ancestors (Ch 22)
+ [16]  Open redirect — /go?u= , /login?next= , /return?to= (naive brand allow-list) (Ch 22)
  [17]  Weak password hashing (MD5)           (Ch 12)
  [18]  JWT — alg=none accepted               (Ch 26)
  [19]  JWT — weak HS256 secret               (Ch 26)
@@ -590,26 +590,41 @@ MITIGATION
   to all POSTs. Set SameSite=Lax on the session cookie at minimum.
 
 --------------------------------------------------------------------------------
- [15] Clickjacking — no X-Frame-Options
+ [15] Clickjacking — no X-Frame-Options (Ch 22)
 --------------------------------------------------------------------------------
-EXPLOIT
-  <iframe src="http://localhost:3001/admin/promote?id=2"></iframe>
-  Style the iframe transparent and overlay a "Win a prize" button.
+No page sets X-Frame-Options or CSP frame-ancestors, so every page frames.
+
+EXPLOIT (high-impact, one click)
+  Frame the OAuth consent screen and overlay a bait button over "Allow":
+    <iframe src="http://localhost:3001/oauth/authorize?client_id=partner-portal
+      &redirect_uri=http://localhost:3001/partners/demo-app/callback
+      &response_type=code&scope=openid%20read:accounts"></iframe>
+  A logged-in victim who "clicks to win" silently authorises the app (the POST
+  carries the framed page's own fields, so CSRF tokens do not help). Reqlore:
+  /poc/clickjacking generates the iframe+overlay PoC.
 
 MITIGATION
-  Set `X-Frame-Options: DENY` (or CSP `frame-ancestors 'none'`) for all
-  authenticated pages.
+  Set `X-Frame-Options: DENY` (or CSP `frame-ancestors 'none'`) on every page;
+  add a confirmation/step-up that cannot be satisfied by a single stray click.
 
 --------------------------------------------------------------------------------
- [16] Open redirect — /go?u= and /login?next=
+ [16] Open redirect — /go?u= , /login?next= , /return?to= (Ch 22)
 --------------------------------------------------------------------------------
-EXPLOIT
-  http://localhost:3001/go?u=https://evil.example.com/phish
-  http://localhost:3001/login?next=https://evil.example.com/phish
+EXPLOIT (no validation)
+  http://localhost:3001/go?u=https://evil.example/phish
+  http://localhost:3001/login  (POST next=https://evil.example/phish)
+
+EXPLOIT (naive brand allow-list — bypass matrix)
+  /return?to= only checks the URL CONTAINS "novatrust". Bypasses:
+    https://novatrust.evil.example/phish     (attacker subdomain)
+    https://evil.example/?brand=novatrust    (brand in path/query)
+    https://novatrust.com@evil.example/       (userinfo; real host evil.example)
+  # tested: brand-less URL -> 400; each bypass -> 302 to the attacker host.
 
 MITIGATION
-  Validate the destination: allow only relative paths starting with `/` and
-  not `//`. For external redirects, require an allow-list of hostnames.
+  Parse the URL and match the HOST against an exact allow-list; for internal
+  redirects allow only a relative path that starts with a single `/` (not `//`
+  or `/\`).
 
 --------------------------------------------------------------------------------
  [17] Weak password hashing (MD5)

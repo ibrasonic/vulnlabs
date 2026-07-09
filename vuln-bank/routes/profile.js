@@ -66,6 +66,25 @@ router.get('/go', (req, res) => {
   return res.redirect(u);
 });
 
+// "Return to NovaTrust" after visiting a partner site. VULN (Ch 22, open
+// redirect via a naive allow-list): the developer tried to restrict the target
+// to NovaTrust by checking the URL merely CONTAINS the brand string. A
+// substring check is not host validation, so every classic bypass sails
+// through:
+//   https://novatrust.evil.com/...        (attacker subdomain contains it)
+//   https://evil.com/?brand=novatrust     (it is in the path/query)
+//   https://novatrust.com@evil.com/       (userinfo, real host is evil.com)
+//   https:novatrust.evil.com              (missing slashes, still off-site)
+// The fix is to parse the URL and match the HOST against an exact allow-list,
+// and to only ever redirect to a relative path that begins with a single '/'.
+router.get('/return', (req, res) => {
+  const to = String(req.query.to || '/');
+  if (!/novatrust/i.test(to)) {
+    return res.status(400).type('text/plain').send('Only NovaTrust destinations are allowed.');
+  }
+  return res.redirect(to);
+});
+
 // VULN: SSRF via webhook registration — server fetches the URL immediately
 // to "validate" it. Includes the user's session cookie? No — but it does
 // fetch internal addresses freely.
