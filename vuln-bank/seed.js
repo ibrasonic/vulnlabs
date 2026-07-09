@@ -10,6 +10,7 @@ console.log('[seed] resetting vuln-bank schema...');
 
 // Drop in reverse FK-order so re-seeding always succeeds.
 db.exec(`
+  DROP TABLE IF EXISTS gift_cards;
   DROP TABLE IF EXISTS webhooks;
   DROP TABLE IF EXISTS audit_log;
   DROP TABLE IF EXISTS support_messages;
@@ -103,6 +104,22 @@ db.exec(`
   ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 `);
 
+// Promotional reward / gift-card codes. Each is meant to be redeemed ONCE and
+// credits the redeemer's checking account. VULN (Ch 21): redemption is a
+// read-check-write with no atomicity, so N concurrent redemptions of the same
+// code all pass the `redeemed = 0` check and each credit the account -> limit
+// overrun (a single-use card minted many times over).
+db.exec(`
+  CREATE TABLE gift_cards (
+    id              INT AUTO_INCREMENT PRIMARY KEY,
+    code            VARCHAR(64) UNIQUE NOT NULL,
+    amount_cents    BIGINT      NOT NULL,
+    redeemed        TINYINT     NOT NULL DEFAULT 0,
+    redeemed_by     INT,
+    redeemed_at     TIMESTAMP   NULL
+  ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+`);
+
 console.log('[seed] inserting users + accounts + transfers...');
 
 const users = [
@@ -183,6 +200,13 @@ db.prepare('INSERT INTO audit_log (user_id, action, details) VALUES (?, ?, ?)')
 
 db.prepare('INSERT INTO webhooks (user_id, url, event) VALUES (?, ?, ?)')
   .run(userIds['alice.chen'], 'https://hooks.example.com/alice-mobile', 'transfer.completed');
+
+const insertCard = db.prepare('INSERT INTO gift_cards (code, amount_cents, redeemed, redeemed_by) VALUES (?, ?, ?, ?)');
+// Single-use promo codes worth real credit; NOVA-WELCOME-50 is the one the
+// walkthrough races. NOVA-USED-10 is already spent (shows the honest path).
+insertCard.run('NOVA-WELCOME-50', 5000, 0, null);
+insertCard.run('NOVA-BONUS-25',   2500, 0, null);
+insertCard.run('NOVA-USED-10',    1000, 1, userIds['bob.martinez']);
 
 console.log('[seed] complete. Test credentials:');
 for (const u of users) console.log(`  ${u.username.padEnd(18)} / ${u.password.padEnd(16)}  (${u.role})`);

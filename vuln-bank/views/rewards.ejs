@@ -1,0 +1,20 @@
+<%- include('partials/header') %>
+<h1>Rewards &amp; gift cards</h1>
+<% if (error) { %><p class="err"><%- error %></p><% } %>
+<% if (ok) { %><p class="ok"><%- ok %></p><% } %>
+
+<p class="muted">Got a NovaTrust promo or gift-card code? Redeem it here and the
+credit lands in your checking account. Each code can be redeemed once.</p>
+
+<% if (account) { %>
+  <p>Crediting account <code><%= account.account_number %></code> &mdash;
+     current balance <strong>$<%= (account.balance_cents / 100).toFixed(2) %></strong></p>
+<% } %>
+
+<form method="post" action="/rewards/redeem">
+  <label>Gift-card code <input name="code" placeholder="NOVA-WELCOME-50" required></label>
+  <button>Redeem</button>
+</form>
+
+<p class="hint">Try <code>NOVA-WELCOME-50</code> ($50) or <code>NOVA-BONUS-25</code> ($25).</p>
+<%- include('partials/footer') %>

