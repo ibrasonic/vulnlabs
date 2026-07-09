@@ -66,4 +66,66 @@ router.post('/send', async (req, res) => {
   }
 });
 
+// ---------------------------------------------------------------------------
+// Two-step confirmation for large transfers. A customer initiates the transfer
+// (which stages it as "pending"), then confirms it on a second page. VULN
+// (Ch 21, multi-endpoint race): the CHECK ("is this still pending?") is on the
+// confirm endpoint, the CHANGE (debit + mark executed) follows an async gap,
+// and the two are not atomic -- so racing the confirm executes ONE authorised
+// transfer many times.
+//
+// The fix: claim the row before moving money, e.g.
+//   UPDATE pending_transfers SET status='executed' WHERE id=? AND status='pending'
+// and only debit when changes===1.
+router.post('/initiate', (req, res) => {
+  const { from, to, amount, memo } = req.body;
+  const cents = parseInt(amount, 10);
+  const src = db.prepare('SELECT * FROM accounts WHERE account_number = ? AND user_id = ?')
+    .get(from, req.session.userId);
+  const dst = db.prepare('SELECT * FROM accounts WHERE account_number = ?').get(to);
+  if (!src || !dst || !(cents > 0)) {
+    return res.status(400).render('transfer', {
+      accounts: db.prepare('SELECT * FROM accounts WHERE user_id = ?').all(req.session.userId),
+      error: 'check the source account (must be yours), destination and amount', ok: null
+    });
+  }
+  const info = db.prepare(
+    "INSERT INTO pending_transfers (user_id, from_account, to_account, amount_cents, memo, status) VALUES (?, ?, ?, ?, ?, 'pending')"
+  ).run(req.session.userId, from, to, cents, memo || '');
+  return res.redirect('/transfer/confirm/' + info.lastInsertRowid);
+});
+
+router.get('/confirm/:id', (req, res) => {
+  const p = db.prepare('SELECT * FROM pending_transfers WHERE id = ? AND user_id = ?')
+    .get(parseInt(req.params.id, 10), req.session.userId);
+  if (!p) return res.redirect('/transfer');
+  res.render('transfer_confirm', { p, error: null });
+});
+
+router.post('/confirm', async (req, res) => {
+  const id = parseInt(req.body.id, 10);
+  const p = db.prepare('SELECT * FROM pending_transfers WHERE id = ? AND user_id = ?')
+    .get(id, req.session.userId);
+  if (!p) return res.status(404).render('transfer', {
+    accounts: db.prepare('SELECT * FROM accounts WHERE user_id = ?').all(req.session.userId),
+    error: 'no such pending transfer', ok: null
+  });
+  // VULN (time-of-check): is it still pending?
+  if (p.status !== 'pending') {
+    return res.redirect('/transfer?ok=1');
+  }
+  // VULN (race window): the confirmation/fraud round trip. Concurrent confirms
+  // of the same pending row all passed the check above during this await.
+  await sleep(200);
+  // time-of-use: move the money and mark it done (non-atomic with the check).
+  db.prepare('UPDATE accounts SET balance_cents = balance_cents - ? WHERE account_number = ?')
+    .run(p.amount_cents, p.from_account);
+  db.prepare('UPDATE accounts SET balance_cents = balance_cents + ? WHERE account_number = ?')
+    .run(p.amount_cents, p.to_account);
+  db.prepare('INSERT INTO transfers (from_account, to_account, amount_cents, memo) VALUES (?, ?, ?, ?)')
+    .run(p.from_account, p.to_account, p.amount_cents, p.memo || 'confirmed');
+  db.prepare("UPDATE pending_transfers SET status = 'executed' WHERE id = ?").run(id);
+  return res.redirect('/transfer?ok=1');
+});
+
 module.exports = router;

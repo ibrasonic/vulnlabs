@@ -1,0 +1,24 @@
+<%- include('partials/header') %>
+<h1>Sign in with a login code</h1>
+<% if (error) { %><p class="err"><%- error %></p><% } %>
+<% if (sent) { %><p class="ok"><%- sent %></p><% } %>
+
+<p class="muted">No password needed &mdash; we&rsquo;ll email you a 6-digit code.</p>
+
+<% if (debugCode) { %>
+  <p class="hint">DEBUG: the code emailed is <code><%= debugCode %></code>.</p>
+<% } %>
+
+<h2>1. Request a code</h2>
+<form method="post" action="/login/code/request">
+  <label>Email <input name="email" type="email" value="<%= email %>" required></label>
+  <button>Email me a code</button>
+</form>
+
+<h2>2. Enter the code</h2>
+<form method="post" action="/login/code/verify">
+  <label>Email <input name="email" type="email" value="<%= email %>" required></label>
+  <label>Code <input name="code" maxlength="6" inputmode="numeric" required></label>
+  <button>Sign in</button>
+</form>
+<%- include('partials/footer') %>

@@ -1,0 +1,19 @@
+<%- include('partials/header') %>
+<h1>Confirm it&rsquo;s you</h1>
+<% if (error) { %><p class="err"><%- error %></p><% } %>
+<% if (ok) { %><p class="ok">Identity confirmed &mdash; <%- ok %>.</p><% } %>
+<p class="muted">For your security, enter the 6-digit code we texted to the phone on
+file. You have 5 attempts before the code is locked.</p>
+
+<% if (debugCode) { %>
+  <p class="hint">DEBUG: the code is <code><%= debugCode %></code>.</p>
+<% } %>
+
+<form method="post" action="/security/verify">
+  <input type="hidden" name="challenge_id" value="<%= challenge.id %>">
+  <label>Security code <input name="code" maxlength="6" inputmode="numeric" required></label>
+  <button>Verify</button>
+</form>
+<p class="hint">Challenge #<%= challenge.id %> &middot; status <code><%= challenge.status %></code>
+   &middot; attempts <code><%= challenge.attempts %></code>/5</p>
+<%- include('partials/footer') %>

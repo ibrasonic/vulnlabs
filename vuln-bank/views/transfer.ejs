@@ -54,4 +54,21 @@
   });
 })();
 </script>
+
+<h2>Large transfer <span class="muted">(needs confirmation)</span></h2>
+<p class="muted">Transfers are staged, then confirmed on a second step for your
+protection.</p>
+<form method="post" action="/transfer/initiate">
+  <label>From
+    <select name="from">
+      <% for (const a of accounts) { %>
+        <option value="<%= a.account_number %>"><%= a.account_number %> &mdash; $<%= (a.balance_cents / 100).toFixed(2) %></option>
+      <% } %>
+    </select>
+  </label>
+  <label>To (account number) <input name="to" required></label>
+  <label>Amount (cents) <input name="amount" type="number" min="1" required></label>
+  <label>Memo <input name="memo" maxlength="60"></label>
+  <button>Review &amp; confirm</button>
+</form>
 <%- include('partials/footer') %>

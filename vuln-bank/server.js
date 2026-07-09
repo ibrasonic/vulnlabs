@@ -78,10 +78,12 @@ app.use('/uploads', express.static(UPLOAD_DIR));
 
 // Mount routes.
 app.use('/',         require('./routes/auth'));
+app.use('/',         require('./routes/passwordless'));
 app.use('/',         require('./routes/profile'));
 app.use('/accounts', require('./routes/accounts'));
 app.use('/transfer', require('./routes/transfers'));
 app.use('/rewards', require('./routes/rewards'));
+app.use('/security', require('./routes/security'));
 app.use('/statements', require('./routes/statements'));
 app.use('/admin/integrity', require('./routes/integrity'));
 app.use('/admin',    require('./routes/admin'));

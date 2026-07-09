@@ -10,6 +10,9 @@ console.log('[seed] resetting vuln-bank schema...');
 
 // Drop in reverse FK-order so re-seeding always succeeds.
 db.exec(`
+  DROP TABLE IF EXISTS login_codes;
+  DROP TABLE IF EXISTS pending_transfers;
+  DROP TABLE IF EXISTS otp_challenges;
   DROP TABLE IF EXISTS gift_cards;
   DROP TABLE IF EXISTS webhooks;
   DROP TABLE IF EXISTS audit_log;
@@ -117,6 +120,56 @@ db.exec(`
     redeemed        TINYINT     NOT NULL DEFAULT 0,
     redeemed_by     INT,
     redeemed_at     TIMESTAMP   NULL
+  ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+`);
+
+// Step-up security codes (SMS/authenticator OTP for a sensitive action).
+// VULN (Ch 21, rate-limit bypass by race): verification reads attempts, checks
+// attempts < 5, waits, then either verifies or increments attempts. The check
+// and the increment are non-atomic, so N concurrent guesses all pass the
+// "under the limit" gate before the counter catches up -> the 5-try
+// anti-brute-force lock never trips and the whole code space is guessable.
+db.exec(`
+  CREATE TABLE otp_challenges (
+    id              INT AUTO_INCREMENT PRIMARY KEY,
+    user_id         INT NOT NULL,
+    purpose         VARCHAR(48) NOT NULL DEFAULT 'step_up',
+    code            VARCHAR(8)  NOT NULL,
+    attempts        INT         NOT NULL DEFAULT 0,
+    status          VARCHAR(16) NOT NULL DEFAULT 'pending',
+    created_at      TIMESTAMP   NOT NULL DEFAULT CURRENT_TIMESTAMP
+  ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+`);
+
+// Two-step confirmation for large transfers. VULN (Ch 21, multi-endpoint
+// race): /transfer/initiate creates a pending row; /transfer/confirm checks
+// status='pending', waits, then debits + marks executed. Racing the confirm
+// endpoint executes ONE authorised transfer many times.
+db.exec(`
+  CREATE TABLE pending_transfers (
+    id              INT AUTO_INCREMENT PRIMARY KEY,
+    user_id         INT NOT NULL,
+    from_account    VARCHAR(64) NOT NULL,
+    to_account      VARCHAR(64) NOT NULL,
+    amount_cents    BIGINT      NOT NULL,
+    memo            VARCHAR(512),
+    status          VARCHAR(16) NOT NULL DEFAULT 'pending',
+    created_at      TIMESTAMP   NOT NULL DEFAULT CURRENT_TIMESTAMP
+  ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+`);
+
+// Passwordless "email me a login code". VULN (Ch 21, time-sensitive): the code
+// is derived from the current second, so two requests made in the same second
+// receive the SAME code. An attacker requests a code for the victim AND for
+// their own address at the same instant, reads their own code, and uses it to
+// log in as the victim.
+db.exec(`
+  CREATE TABLE login_codes (
+    id              INT AUTO_INCREMENT PRIMARY KEY,
+    email           VARCHAR(191) NOT NULL,
+    code            VARCHAR(8)   NOT NULL,
+    used            TINYINT      NOT NULL DEFAULT 0,
+    created_at      TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP
   ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 `);
 

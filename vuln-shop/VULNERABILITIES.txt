@@ -439,6 +439,19 @@ V-SHOP-055  Race condition on inventory decrement
   Mitigation: UPDATE products SET stock = stock - ? WHERE id=? AND stock >= ?
               and check rowcount.
 
+V-SHOP-056  Race condition: coupon stacking (single-endpoint, Ch 21)
+  Location:  routes/checkout.js POST /checkout/apply-coupon
+  Detail:    Only ONE coupon is allowed per order, but the "already has a
+             coupon?" check and the insert into cart_coupons are non-atomic
+             (a 150 ms loyalty-service await between them). Applying two
+             DIFFERENT codes at the same instant lets both attach and their
+             percent_off stack (capped 90%).
+  Exploit:   ( curl -s -b cookies -d code=SUMMER25 .../checkout/apply-coupon &
+               curl -s -b cookies -d code=STAFF50  .../checkout/apply-coupon & wait )
+             # tested: both stick -> 25% + 50% = 75% off; sequential 2nd is rejected.
+  Mitigation: UNIQUE(cart_id) or an atomic insert-if-absent; re-check inside a
+              transaction; sum-and-cap server-side.
+
 
 -----------------------------------------------------------------
 SSRF / FILE UPLOAD / PATH TRAVERSAL

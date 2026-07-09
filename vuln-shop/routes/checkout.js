@@ -22,17 +22,32 @@ router.get('/', (req, res) => {
 
 // VULN: coupon code lookup is direct equality; no rate limit on attempts.
 // Combined with low-entropy codes (STAFF50, SUMMER25) makes brute force cheap.
-router.post('/apply-coupon', (req, res) => {
+// VULN (Ch 21, single-endpoint race): only ONE coupon is allowed per order,
+// but the "already has a coupon?" check and the insert are non-atomic with an
+// async gap between them, so racing two DIFFERENT codes lets both attach and
+// their discounts stack (e.g. SUMMER25 + STAFF50 = 75% off).
+router.post('/apply-coupon', async (req, res) => {
   const code = (req.body.code || '').trim().toUpperCase();
   const c = db.prepare('SELECT * FROM coupons WHERE code = ?').get(code);
   if (!c) {
     // VULN: distinguishable response — coupon enumeration
     return res.status(404).json({ ok: false, error: 'unknown coupon' });
   }
-  // VULN: no check on uses; same code can be applied unlimited times.
-  req.session.coupon = c.code;
-  req.session.couponPct = c.percent_off;
-  return res.json({ ok: true, code: c.code, percent_off: c.percent_off });
+  const cart = db.prepare('SELECT * FROM carts WHERE user_id = ? ORDER BY id DESC LIMIT 1').get(req.session.userId);
+  if (!cart) return res.status(400).json({ ok: false, error: 'no cart' });
+
+  // VULN (time-of-check): one coupon per order.
+  const already = db.prepare('SELECT COUNT(*) AS n FROM cart_coupons WHERE cart_id = ?').get(cart.id).n;
+  if (already >= 1) return res.status(409).json({ ok: false, error: 'one coupon per order' });
+
+  // VULN (race window): the loyalty/pricing-service round trip. Concurrent
+  // applies of different codes all passed the check above during this await.
+  await new Promise(r => setTimeout(r, 150));
+
+  // time-of-use: attach the coupon (no re-check).
+  db.prepare('INSERT INTO cart_coupons (cart_id, code, percent_off) VALUES (?, ?, ?)').run(cart.id, c.code, c.percent_off);
+  const stacked = db.prepare('SELECT COALESCE(SUM(percent_off),0) AS s FROM cart_coupons WHERE cart_id = ?').get(cart.id).s;
+  return res.json({ ok: true, code: c.code, percent_off: c.percent_off, stacked_total: Math.min(stacked, 90) });
 });
 
 // Place order — pays from credits (no real payment).
@@ -51,8 +66,12 @@ router.post('/place', async (req, res) => {
     // VULN: doesn't reject negative qty
     total += it.qty * it.price_cents;
   }
-  const pct = req.session.couponPct || 0;
+  // Stacked coupons attached to this cart (see the /apply-coupon race): sum
+  // their percent_off, capped at 90%.
+  const applied = db.prepare('SELECT code, percent_off FROM cart_coupons WHERE cart_id = ?').all(cart.id);
+  const pct = Math.min(90, applied.reduce((s, c) => s + c.percent_off, 0));
   total = Math.max(0, Math.floor(total * (100 - pct) / 100));
+  const couponLabel = applied.map(c => c.code).join('+') || null;
 
   // Race window
   await new Promise(r => setTimeout(r, 40));
@@ -67,7 +86,7 @@ router.post('/place', async (req, res) => {
   const r = db.prepare(`
     INSERT INTO orders (user_id, total_cents, coupon, status, shipping_address)
     VALUES (?, ?, ?, 'placed', ?)
-  `).run(req.session.userId, total, req.session.coupon || null, shipping);
+  `).run(req.session.userId, total, couponLabel, shipping);
   const orderId = r.lastInsertRowid;
   for (const it of items) {
     db.prepare('INSERT INTO order_items (order_id, product_id, qty, price_cents) VALUES (?, ?, ?, ?)')
@@ -75,6 +94,7 @@ router.post('/place', async (req, res) => {
   }
   // Clear cart
   db.prepare('DELETE FROM cart_items WHERE cart_id = ?').run(cart.id);
+  db.prepare('DELETE FROM cart_coupons WHERE cart_id = ?').run(cart.id);
   req.session.coupon = null;
   req.session.couponPct = 0;
 

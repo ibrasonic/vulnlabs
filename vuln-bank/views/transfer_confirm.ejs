@@ -1,0 +1,19 @@
+<%- include('partials/header') %>
+<h1>Confirm transfer</h1>
+<% if (error) { %><p class="err"><%- error %></p><% } %>
+<p class="muted">Large transfers need a second confirmation. Review and confirm to send.</p>
+
+<table>
+  <tr><th>From</th><td><code><%= p.from_account %></code></td></tr>
+  <tr><th>To</th><td><code><%= p.to_account %></code></td></tr>
+  <tr><th>Amount</th><td><strong>$<%= (p.amount_cents / 100).toFixed(2) %></strong></td></tr>
+  <tr><th>Memo</th><td><%- p.memo || '' %></td></tr>
+  <tr><th>Status</th><td><code><%= p.status %></code></td></tr>
+</table>
+
+<form method="post" action="/transfer/confirm">
+  <input type="hidden" name="id" value="<%= p.id %>">
+  <button>Confirm and send</button>
+</form>
+<p><a href="/transfer">&laquo; Cancel</a></p>
+<%- include('partials/footer') %>

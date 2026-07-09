@@ -67,6 +67,13 @@ db.exec(`
     used INTEGER NOT NULL DEFAULT 0
   );
 
+  CREATE TABLE IF NOT EXISTS cart_coupons (
+    id INTEGER PRIMARY KEY,
+    cart_id INTEGER NOT NULL REFERENCES carts(id),
+    code TEXT NOT NULL,
+    percent_off INTEGER NOT NULL
+  );
+
   CREATE TABLE IF NOT EXISTS orders (
     id INTEGER PRIMARY KEY,
     user_id INTEGER NOT NULL REFERENCES users(id),
