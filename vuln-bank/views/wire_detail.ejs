@@ -1,0 +1,26 @@
+<%- include('partials/header') %>
+<h1>Wire #<%= w.id %></h1>
+<table>
+  <tr><th>From</th><td><code><%= w.from_account %></code></td></tr>
+  <tr><th>To</th><td><code><%= w.to_account %></code></td></tr>
+  <tr><th>Amount</th><td><strong>$<%= (w.amount_cents / 100).toFixed(2) %></strong></td></tr>
+  <tr><th>Status</th><td><code><%= w.status %></code></td></tr>
+</table>
+<% if (w.amount_cents > limit) { %>
+  <p class="hint">This wire is over the $<%= (limit/100).toFixed(0) %> daily limit and should be
+  blocked by compliance.</p>
+<% } %>
+
+<h2>Step 2 &mdash; compliance review</h2>
+<form method="post" action="/wire/review">
+  <input type="hidden" name="id" value="<%= w.id %>">
+  <button>Run compliance review</button>
+</form>
+
+<h2>Step 3 &mdash; execute</h2>
+<form method="post" action="/wire/execute">
+  <input type="hidden" name="id" value="<%= w.id %>">
+  <button>Execute wire</button>
+</form>
+<p><a href="/wire">&laquo; New wire</a></p>
+<%- include('partials/footer') %>

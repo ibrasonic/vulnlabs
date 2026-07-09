@@ -43,7 +43,8 @@ Hidden secret in JS bundle: sk_live_NOVATRUST_DEBUG_4242424242424242
  [12]  Prototype pollution — lodash.merge   (Ch 31)
  [13]  Race conditions (Ch 21): balance overdraw (/transfer/send) + gift-card limit overrun
         (/rewards/redeem) + OTP rate-limit bypass (/security/verify) + multi-endpoint confirm
-        (/transfer/initiate,confirm) + time-sensitive login code (/login/code)
+        (/transfer/initiate,confirm) + time-sensitive login code (/login/code) + partial
+        construction (/accounts/open) + hidden multi-step wire (/wire/review vs /wire/execute)
  [14]  No CSRF protection — GET transfer     (Ch 23)
  [15]  Clickjacking — no X-Frame-Options     (Ch 23)
  [16]  Open redirect — /go?u= and /login?next= (Ch 16)
@@ -548,6 +549,31 @@ MORE RACE SINKS (Ch 21) — all read-check-write with a real `await` gap:
         curl -s -d email=attacker@... .../login/code/request & wait )
       # tested: both codes were 596985 -> then POST /login/code/verify {victim,code}.
     FIX: crypto.randomInt per account; never derive a secret from a clock.
+
+  [13e] Partial-construction race — POST /accounts/open (routes/accounts.js)
+    A one-per-customer $100 welcome bonus. open CHECKS "already claimed?",
+    awaits (KYC), then builds the account WITH the $100 and records the claim.
+    The check and the claim straddle the gap, so concurrent opens all read
+    "not claimed" and each build a bonus-laden account.
+      seq 12 | xargs -P12 -I{} curl -s -b cookies -o /dev/null -X POST \
+        http://localhost:3001/accounts/open
+      # tested: sequential = 1 bonus + $0 accounts; race = 3 bonus accounts,
+      # 1 claim -> 3 x $100 minted. Object built before the guard exists.
+    FIX: claim first (INSERT welcome_bonus_claims UNIQUE user_id) and credit the
+         $100 only when that insert succeeds; else open a $0 account.
+
+  [13f] Hidden multi-step race — POST /wire/draft -> race /wire/review vs /wire/execute
+    Wire wizard: draft -> compliance review (blocks > $10,000) -> execute
+    (refuses a 'blocked' wire). The steps are guarded but their ORDER is not:
+    racing execute against review lets execute read the still-'draft' status
+    during review's compliance round trip, so an over-limit wire skips the gate.
+      # draft an over-limit wire (amount=5000000), then:
+      ( curl -s -b cookies -d id=<id> .../wire/review &
+        curl -s -b cookies -d id=<id> .../wire/execute & wait )
+      # tested: honest order blocks; raced -> status=executed, $50,000 moved.
+    FIX: execute must require the POSITIVE state it depends on and claim it
+         atomically: UPDATE wires SET status='executing' WHERE id=? AND status='reviewed'
+         (move money iff changes===1).
 
 --------------------------------------------------------------------------------
  [14] No CSRF protection — GET transfer

@@ -1,0 +1,18 @@
+<%- include('partials/header') %>
+<h1>International wire</h1>
+<% if (error) { %><p class="err"><%- error %></p><% } %>
+<p class="muted">Wires are drafted, screened by compliance, then executed. Wires over
+$10,000 are blocked at the review step.</p>
+<form method="post" action="/wire/draft">
+  <label>From
+    <select name="from">
+      <% for (const a of accounts) { %>
+        <option value="<%= a.account_number %>"><%= a.account_number %> &mdash; $<%= (a.balance_cents / 100).toFixed(2) %></option>
+      <% } %>
+    </select>
+  </label>
+  <label>To (IBAN / account number) <input name="to" required></label>
+  <label>Amount (cents) <input name="amount" type="number" min="1" required></label>
+  <button>Draft wire</button>
+</form>
+<%- include('partials/footer') %>

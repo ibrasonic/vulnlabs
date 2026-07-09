@@ -10,6 +10,8 @@ console.log('[seed] resetting vuln-bank schema...');
 
 // Drop in reverse FK-order so re-seeding always succeeds.
 db.exec(`
+  DROP TABLE IF EXISTS wires;
+  DROP TABLE IF EXISTS welcome_bonus_claims;
   DROP TABLE IF EXISTS login_codes;
   DROP TABLE IF EXISTS pending_transfers;
   DROP TABLE IF EXISTS otp_challenges;
@@ -170,6 +172,36 @@ db.exec(`
     code            VARCHAR(8)   NOT NULL,
     used            TINYINT      NOT NULL DEFAULT 0,
     created_at      TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP
+  ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+`);
+
+// One $100 welcome bonus per customer when opening a savings account. VULN
+// (Ch 21, partial-construction race): /accounts/open INSERTs the account with
+// the $100 already inside, waits, and only THEN writes the one-per-customer
+// claim. The account is fully built and spendable before the guard exists, so
+// racing the open mints a $100 account per concurrent request.
+db.exec(`
+  CREATE TABLE welcome_bonus_claims (
+    id              INT AUTO_INCREMENT PRIMARY KEY,
+    user_id         INT NOT NULL UNIQUE,
+    created_at      TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+  ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+`);
+
+// International wire wizard: draft -> compliance review -> execute. VULN
+// (Ch 21, hidden multi-step race): the steps are each guarded but their ORDER
+// is not enforced. Racing /wire/execute against /wire/review lets execute read
+// the still-'draft' status before review can set 'blocked', so an over-limit
+// wire skips the compliance gate.
+db.exec(`
+  CREATE TABLE wires (
+    id              INT AUTO_INCREMENT PRIMARY KEY,
+    user_id         INT NOT NULL,
+    from_account    VARCHAR(64) NOT NULL,
+    to_account      VARCHAR(64) NOT NULL,
+    amount_cents    BIGINT      NOT NULL,
+    status          VARCHAR(16) NOT NULL DEFAULT 'draft',
+    created_at      TIMESTAMP   NOT NULL DEFAULT CURRENT_TIMESTAMP
   ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 `);
 
