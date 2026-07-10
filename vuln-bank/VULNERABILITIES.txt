@@ -614,12 +614,15 @@ EXPLOIT (no validation)
   http://localhost:3001/go?u=https://evil.example/phish
   http://localhost:3001/login  (POST next=https://evil.example/phish)
 
-EXPLOIT (naive brand allow-list — bypass matrix)
-  /return?to= only checks the URL CONTAINS "novatrust". Bypasses:
-    https://novatrust.evil.example/phish     (attacker subdomain)
-    https://evil.example/?brand=novatrust    (brand in path/query)
-    https://novatrust.com@evil.example/       (userinfo; real host evil.example)
-  # tested: brand-less URL -> 400; each bypass -> 302 to the attacker host.
+EXPLOIT (naive host-substring allow-list — bypass matrix)
+  /return?to= only checks the URL CONTAINS "localhost" (the bank's own host;
+  in production this would be the real domain). Bypasses:
+    http://localhost.evil.example/phish      (attacker subdomain)
+    http://evil.example/login?ref=localhost  (token in path/query)
+    http://localhost@evil.example/           (userinfo; real host evil.example)
+    http://localhost:3001@evil.example/      (same, with the port)
+  # tested: URL without the token -> 400; each bypass -> 302 to the attacker host;
+  #         http://localhost:3001/accounts (genuinely on-site) -> 302 allowed.
 
 MITIGATION
   Parse the URL and match the HOST against an exact allow-list; for internal
