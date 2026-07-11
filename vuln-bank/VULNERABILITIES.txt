@@ -470,17 +470,26 @@ MITIGATION
 --------------------------------------------------------------------------------
  [12] Prototype pollution — lodash.merge
 --------------------------------------------------------------------------------
-Endpoint:   POST /profile  (settings JSON merged into profile)
+Endpoint:   POST /profile  (settings JSON deep-merged into profile)
 
 EXPLOIT
   1. As alice.chen, POST /profile with form field:
-       settings = {"__proto__":{"isAdmin":true,"overdraftLimit":99999999}}
-  2. Call /profile/admin-check — response shows `isAdmin: true`.
+       settings = {"__proto__":{"isAdmin":true,"overdraftLimit":2000000}}
+     (the constructor.prototype shape also works:
+       settings = {"constructor":{"prototype":{"isAdmin":true}}} )
+  2. Demo gadget: GET /profile/admin-check echoes `isAdmin: true` (one-request proof).
+  3. REAL gadget: doTransfer() in routes/transfers.js reads `overdraftLimit` off a
+     fresh {} with no own-property check, so after step 1 a transfer of MORE than
+     the account balance succeeds (tested: $20,000 from a $12,487.50 account is
+     rejected before pollution and goes through after). Un-polluted the value is
+     0, so normal transfers (and the Ch21 race) behave exactly as before.
+  4. Cross-session: the write lands on Object.prototype (process-wide), so a
+     freshly-logged-in second user reads the same polluted values.
 
 MITIGATION
-  Use `Object.assign({}, target, source)` w/ key filter, or use `lodash.mergeWith`
-  with a customizer that rejects `__proto__`/`prototype`/`constructor`. Upgrade
-  lodash to 4.17.21+ and pair with a Map-based settings store.
+  Block `__proto__`/`prototype`/`constructor` in the merge, or merge into
+  Object.create(null); validate `settings` against a strict schema; read gadgets
+  with Object.hasOwn(obj, key); Object.freeze(Object.prototype) at startup.
 
 --------------------------------------------------------------------------------
  [13] Race condition — balance overdraw + gift-card limit overrun (Ch 21)

@@ -24,7 +24,15 @@ function doTransfer({ from, to, amount, memo }) {
   // and the write are three separate statements with no transaction, so two
   // requests that overlap both pass the check before either writes.
   const fresh = db.prepare('SELECT balance_cents FROM accounts WHERE id = ?').get(src.id);
-  if (fresh.balance_cents < amount) throw new Error('insufficient funds');
+  // VULN (A08 prototype-pollution GADGET): the per-transfer limits are read
+  // from a fresh {} with no own-property check, so `overdraftLimit` is read
+  // straight off Object.prototype. Un-polluted it is undefined -> 0, so the
+  // check is exactly `balance < amount` (behaviour unchanged). If the prototype
+  // was polluted via POST /profile ({"__proto__":{"overdraftLimit":<cents>}}),
+  // the customer may now move that many cents MORE than they actually hold.
+  const limits = {};
+  const overdraft = limits.overdraftLimit || 0;
+  if (fresh.balance_cents + overdraft < amount) throw new Error('insufficient funds');
   // VULN (race window): a REAL asynchronous gap between the check and the
   // write. In production this is the network call to a fraud/limits service or
   // an SMS gateway; here it is an await so Node's event loop interleaves a
