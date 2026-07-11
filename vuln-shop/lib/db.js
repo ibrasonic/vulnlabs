@@ -107,6 +107,14 @@ db.exec(`
     purpose TEXT,
     created_at TEXT DEFAULT (datetime('now'))
   );
+
+  -- Ch23 prototype-pollution feature: an isolated store-credit rewards wallet.
+  -- Nothing else in the app reads or writes it, so exercising it can never
+  -- disturb another chapter's data.
+  CREATE TABLE IF NOT EXISTS reward_wallet (
+    user_id INTEGER PRIMARY KEY REFERENCES users(id),
+    credit_cents INTEGER NOT NULL DEFAULT 0
+  );
 `);
 
 module.exports = db;

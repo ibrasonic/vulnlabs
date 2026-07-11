@@ -1,0 +1,26 @@
+<%- include('partials/header') %>
+<h1>Broadcast</h1>
+<% if (msg) { %><div class="ok"><%= msg %></div><% } %>
+<% if (error) { %><div class="error"><%= error %></div><% } %>
+
+<p>Send a post to the whole platform. Reaching every account is a
+  <strong>Premium (verified)</strong> feature.
+  Your account: <strong><%= canBroadcast ? 'may broadcast' : 'standard (blocked)' %></strong>.</p>
+
+<form method="post" action="/broadcast">
+  <label>Message <textarea name="body" rows="3" maxlength="280" placeholder="Announce something to everyone..."></textarea></label>
+  <button>Broadcast to everyone</button>
+</form>
+
+<h2>Recent broadcasts</h2>
+<% if (!rows.length) { %>
+  <p class="muted">No broadcasts yet.</p>
+<% } else { %>
+  <ul>
+    <% rows.forEach(function (r) { %>
+      <li><strong>@<%= r.username %></strong> reached <%= r.reach.toLocaleString() %> accounts:
+        <%= r.body %> <span class="muted">(<%= r.created_at %>)</span></li>
+    <% }); %>
+  </ul>
+<% } %>
+<%- include('partials/footer') %>

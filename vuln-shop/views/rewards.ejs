@@ -1,0 +1,17 @@
+<%- include('partials/header') %>
+<h1>Rewards wallet</h1>
+<% if (msg) { %><p class="ok"><%= msg %></p><% } %>
+
+<p>Reward balance: <strong>$<%= (balance / 100).toFixed(2) %></strong></p>
+<p>Shipping on your next order:
+  <strong><% if (freeShipping) { %>FREE (member perk)<% } else { %>$<%= (shipping / 100).toFixed(2) %><% } %></strong>
+</p>
+
+<form method="post" action="/rewards/claim">
+  <button>Claim welcome reward</button>
+</form>
+
+<p class="muted">Standard members earn a $5.00 welcome reward and pay standard
+shipping. VIP members earn a multiple and ship free. Your tier is applied
+automatically at claim time.</p>
+<%- include('partials/footer') %>

@@ -70,6 +70,7 @@ app.use('/', require('./routes/profile'));
 app.use('/products', require('./routes/products'));
 app.use('/cart', require('./routes/cart'));
 app.use('/checkout', require('./routes/checkout'));
+app.use('/rewards', require('./routes/rewards'));
 app.use('/orders', require('./routes/orders'));
 app.use('/admin', require('./routes/admin'));
 app.use('/contact', require('./routes/contact'));

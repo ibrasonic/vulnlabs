@@ -58,6 +58,7 @@ app.use('/', require('./routes/feed'));
 app.use('/', require('./routes/auth'));
 app.use('/', require('./routes/profile'));
 app.use('/p', require('./routes/posts'));
+app.use('/broadcast', require('./routes/broadcast'));
 app.use('/follow', require('./routes/follow'));
 app.use('/dm', require('./routes/dm'));
 app.use('/admin', require('./routes/admin'));

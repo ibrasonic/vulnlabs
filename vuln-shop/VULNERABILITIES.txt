@@ -365,14 +365,22 @@ V-SHOP-037  Mass-assignment via PUT /api/users/:id
 INJECTION & DESERIALISATION
 -----------------------------------------------------------------
 
-V-SHOP-040  Prototype pollution via /profile
-  Location:  routes/profile.js (unsafeDeepMerge into req.user)
-  Exploit:   POST /profile  (JSON body)
-             { "settings": { "__proto__": { "isAdmin": true } } }
-             Then GET /profile/perks-check -> returns admin perks because
-             Object.prototype.isAdmin is now true for every object.
-  Mitigation: never deep-merge raw req.body; if you must, use a safe merge that
-              skips __proto__/constructor/prototype.
+V-SHOP-040  Prototype pollution via /profile  (+ real reward gadget)
+  Location:  routes/profile.js  unsafeDeepMerge(profile, JSON.parse(settings))
+  Exploit:   POST /profile  (form field `settings` = JSON string)
+               settings = {"__proto__":{"isAdmin":true}}
+               (the constructor.prototype shape also works)
+             Demo gadget: GET /profile/perks-check echoes the flipped flags.
+             REAL gadget: routes/rewards.js reads `creditMultiplier` and
+               `freeShipping` off a fresh {} with no own-property check, so
+               settings = {"__proto__":{"creditMultiplier":100,"freeShipping":true}}
+               makes POST /rewards/claim mint 100x store credit ($500 per claim
+               instead of $5) and shows FREE shipping for everyone in the process.
+               Un-polluted the multiplier is 1 and shipping is charged, so the
+               feature behaves normally. Wallet lives in its own reward_wallet
+               table -> exercising it never touches another chapter's data.
+  Mitigation: never deep-merge raw input; block __proto__/constructor/prototype;
+              read gadgets with Object.hasOwn.
 
 V-SHOP-041  SSTI via /contact (Jinja2 in email-service)
   Location:  routes/contact.js -> email-service/email_service.py

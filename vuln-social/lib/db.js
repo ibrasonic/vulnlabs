@@ -91,6 +91,17 @@ db.exec(`
     visibility TEXT DEFAULT 'public',      -- VULN: 'internal' never enforced at retrieval
     created_at TEXT DEFAULT (datetime('now'))
   );
+
+  -- Ch23 prototype-pollution feature: an isolated platform-broadcast log.
+  -- Nothing else in the app reads or writes it, so exercising it can never
+  -- disturb another chapter's data.
+  CREATE TABLE IF NOT EXISTS broadcasts (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER REFERENCES users(id),
+    body TEXT NOT NULL,
+    reach INTEGER NOT NULL DEFAULT 0,
+    created_at TEXT DEFAULT (datetime('now'))
+  );
 `);
 
 module.exports = db;
