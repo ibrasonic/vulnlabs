@@ -1,0 +1,42 @@
+<%- include('partials/header') %>
+<h1>Extension marketplace</h1>
+<p class="muted">Staff tool. Drop a new module into the running bank without a
+redeploy. An extension may export an <code>init()</code> function; its return
+value is shown below after install.</p>
+
+<% if (error) { %><p class="err"><%- error %></p><% } %>
+<% if (result) { %>
+  <div class="ticket">
+    <p class="ok">Installed <strong><%- result.name %></strong>.</p>
+    <h3><code>init()</code> output</h3>
+    <pre><%- result.output %></pre>
+  </div>
+<% } %>
+
+<h2>Install an extension (paste code)</h2>
+<form method="post" action="/admin/integrity/install">
+  <label>Name <input name="name" placeholder="my-extension"></label>
+  <label>Code (JavaScript)
+    <textarea name="code" rows="6" placeholder="module.exports = { init: () => 'hello from my extension' };"></textarea>
+  </label>
+  <button>Install extension</button>
+</form>
+
+<h2>Install from a marketplace URL</h2>
+<p class="muted">Fetches the module source from a URL and installs it &mdash; handy
+for pulling a build from our CI server or the partner registry.</p>
+<form method="post" action="/admin/integrity/install-url">
+  <label>Name <input name="name" placeholder="remote-ext"></label>
+  <label>Source URL <input name="url" placeholder="https://registry.example.com/ext.js"></label>
+  <button>Fetch &amp; install</button>
+</form>
+
+<h2>Installed extensions</h2>
+<% if (!plugins.length) { %>
+  <p class="muted">None installed yet.</p>
+<% } else { %>
+  <ul>
+    <% plugins.forEach(function (p) { %><li><code><%- p %></code></li><% }); %>
+  </ul>
+<% } %>
+<%- include('partials/footer') %>
