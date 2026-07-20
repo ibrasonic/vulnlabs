@@ -55,7 +55,12 @@ async function callModel(userPrompt) {
     // bait when GEMINI_API_KEY is unset.
     const toolMatch = userPrompt.match(/<tool\s+name="([a-z_]+)"\s+url="([^"]+)"\s*\/>/i);
     if (toolMatch) {
-      return { provider: 'stub', text: '<tool name="' + toolMatch[1] + '" url="' + toolMatch[2] + '"/>' };
+      // Prefer a real attacker-supplied URL over the placeholder "URL" that
+      // appears in the AGENT_SYSTEM instructions, so the SSRF hunt (V-SOC-083)
+      // is deterministically reproducible with the stub (no API key).
+      const all = [...userPrompt.matchAll(/<tool\s+name="([a-z_]+)"\s+url="([^"]+)"\s*\/>/ig)];
+      const chosen = all.find(m => m[2] && m[2] !== 'URL') || toolMatch;
+      return { provider: 'stub', text: '<tool name="' + chosen[1] + '" url="' + chosen[2] + '"/>' };
     }
     return { provider: 'stub', text: '[stub-llm] ' + userPrompt.slice(0, 2000) };
   }
