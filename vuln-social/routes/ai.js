@@ -23,6 +23,10 @@ router.get('/', (req, res) => {
 // attacker can plant payload in their own post and then call summarize on it.
 // VULN (V-SOC-083): when mode=agent, the model is given a web_fetch tool with
 // no host allow-list. Prompt injection then chains into SSRF.
+// VULN (V-SOC-087): the summary this stores in ai_logs is later rendered as
+// raw HTML by views/ai.ejs (improper output handling, LLM05), so a payload
+// that makes the model emit an <img onerror=...> tag becomes stored XSS in
+// the moderator dashboard.
 router.post('/summarize', async (req, res) => {
   const postId = parseInt(req.body.post_id || '0', 10);
   if (!postId) return res.status(400).send('missing post_id');
